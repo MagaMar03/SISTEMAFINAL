@@ -4201,9 +4201,16 @@ def dashboard_supervisores():
     except Exception:
         pass
 
-    # Mostrar el header_modulo para que aparezca el banner
+    # Desempaquetar dashboard para resetear el orden
+    try:
+        dashboard_frame.pack_forget()
+    except Exception:
+        pass
+
+    # Mostrar el header_modulo para que aparezca el banner (ARRIBA)
     header_modulo.pack(fill="x")
 
+    # Ahora empaquetar el dashboard (ABAJO del header)
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
     for widget in dashboard_frame.winfo_children():
@@ -7026,9 +7033,16 @@ def dashboard_acciones_inductivas():
     except Exception:
         pass
 
-    # Mostrar el header_modulo para que aparezca el banner
+    # Desempaquetar dashboard para resetear el orden
+    try:
+        dashboard_frame.pack_forget()
+    except Exception:
+        pass
+
+    # Mostrar el header_modulo para que aparezca el banner (ARRIBA)
     header_modulo.pack(fill="x")
 
+    # Ahora empaquetar el dashboard (ABAJO del header)
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
     # limpiar contenido previo
@@ -12128,10 +12142,16 @@ def dashboard_control_detracciones():
     except Exception:
         pass
 
-    # Mostrar el header_modulo para que aparezca el banner
+    # Desempaquetar dashboard para resetear el orden
+    try:
+        dashboard_frame.pack_forget()
+    except Exception:
+        pass
+
+    # Mostrar el header_modulo para que aparezca el banner (ARRIBA)
     header_modulo.pack(fill="x")
 
-    # Mostrar dashboard frame
+    # Mostrar dashboard frame (ABAJO del header)
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
     # Limpiar dashboard
