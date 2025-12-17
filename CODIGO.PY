@@ -16761,8 +16761,22 @@ def ir_a_modulo():
     frame_inicio.pack_forget()
     header.pack_forget()
     frame_modulo.pack(fill="both", expand=True)
-    # Mostrar el banner arriba dentro de frame_modulo
+
+    # Desempaquetar TODO de frame_modulo para re-empaquetar en orden correcto
+    try:
+        header_modulo.pack_forget()
+        toggle_frame.pack_forget()
+        menu_frame.pack_forget()
+        right_frame.pack_forget()
+    except:
+        pass
+
+    # Empaquetar en orden: PRIMERO header arriba, LUEGO el resto a la izquierda
     header_modulo.pack(side="top", fill="x")
+    toggle_frame.pack(side="left", fill="y")
+    menu_frame.pack(side="left", fill="y", padx=0, pady=0)
+    right_frame.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+
     app.state("zoomed")
     try:
         dashboard_frame.pack_forget()
