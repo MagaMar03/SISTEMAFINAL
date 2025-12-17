@@ -92,9 +92,7 @@ logo_label.pack(side="left", padx=8, pady=8)
 banner_label = tk.Label(header, bg="#feffff")
 banner_label.pack(side="left", fill="both", expand=True)
 
-header_modulo = ctk.CTkFrame(app, fg_color="#feffff", height=100)
-banner_label_modulo = tk.Label(header_modulo, bg="#feffff")
-banner_label_modulo.pack(fill="both", expand=True)
+# header_modulo se crea más adelante, después de frame_modulo
 
 # ==========================
 # FUNCIONES LOGO Y BANNERS (sin cambios)
@@ -167,6 +165,12 @@ frame_inicio = ctk.CTkFrame(app, fg_color=COLOR_GRAY_BG)
 frame_inicio.pack(fill="both", expand=True)
 
 frame_modulo = ctk.CTkFrame(app, fg_color="white")
+
+# --- Header del módulo (banner) - hijo de frame_modulo, inicialmente oculto ---
+header_modulo = ctk.CTkFrame(frame_modulo, fg_color="#feffff", height=100)
+banner_label_modulo = tk.Label(header_modulo, bg="#feffff")
+banner_label_modulo.pack(fill="both", expand=True)
+# No se empaqueta aquí, se empaqueta cuando se necesita mostrar
 
 menu_visible = True
 
@@ -4201,12 +4205,12 @@ def dashboard_supervisores():
     except Exception:
         pass
 
-    # Mostrar el header_modulo ANTES de frame_modulo para que aparezca arriba
+    # Mostrar el header_modulo arriba (side="top") antes del contenido
     try:
         header_modulo.pack_forget()
     except:
         pass
-    header_modulo.pack(fill="x", before=frame_modulo)
+    header_modulo.pack(side="top", fill="x")
 
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
@@ -7030,12 +7034,12 @@ def dashboard_acciones_inductivas():
     except Exception:
         pass
 
-    # Mostrar el header_modulo ANTES de frame_modulo para que aparezca arriba
+    # Mostrar el header_modulo arriba (side="top") antes del contenido
     try:
         header_modulo.pack_forget()
     except:
         pass
-    header_modulo.pack(fill="x", before=frame_modulo)
+    header_modulo.pack(side="top", fill="x")
 
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
@@ -12136,12 +12140,12 @@ def dashboard_control_detracciones():
     except Exception:
         pass
 
-    # Mostrar el header_modulo ANTES de frame_modulo para que aparezca arriba
+    # Mostrar el header_modulo arriba (side="top") antes del contenido
     try:
         header_modulo.pack_forget()
     except:
         pass
-    header_modulo.pack(fill="x", before=frame_modulo)
+    header_modulo.pack(side="top", fill="x")
 
     # Mostrar dashboard frame
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
@@ -16726,8 +16730,9 @@ def ocultar_menu():
 def ir_a_modulo():
     frame_inicio.pack_forget()
     header.pack_forget()
-    header_modulo.pack(fill="x")
     frame_modulo.pack(fill="both", expand=True)
+    # Mostrar el banner arriba dentro de frame_modulo
+    header_modulo.pack(side="top", fill="x")
     app.state("zoomed")
     try:
         dashboard_frame.pack_forget()
