@@ -4201,16 +4201,13 @@ def dashboard_supervisores():
     except Exception:
         pass
 
-    # Desempaquetar dashboard para resetear el orden
+    # Mostrar el header_modulo ANTES de frame_modulo para que aparezca arriba
     try:
-        dashboard_frame.pack_forget()
-    except Exception:
+        header_modulo.pack_forget()
+    except:
         pass
+    header_modulo.pack(fill="x", before=frame_modulo)
 
-    # Mostrar el header_modulo para que aparezca el banner (ARRIBA)
-    header_modulo.pack(fill="x")
-
-    # Ahora empaquetar el dashboard (ABAJO del header)
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
     for widget in dashboard_frame.winfo_children():
@@ -7033,16 +7030,13 @@ def dashboard_acciones_inductivas():
     except Exception:
         pass
 
-    # Desempaquetar dashboard para resetear el orden
+    # Mostrar el header_modulo ANTES de frame_modulo para que aparezca arriba
     try:
-        dashboard_frame.pack_forget()
-    except Exception:
+        header_modulo.pack_forget()
+    except:
         pass
+    header_modulo.pack(fill="x", before=frame_modulo)
 
-    # Mostrar el header_modulo para que aparezca el banner (ARRIBA)
-    header_modulo.pack(fill="x")
-
-    # Ahora empaquetar el dashboard (ABAJO del header)
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
     # limpiar contenido previo
@@ -12142,16 +12136,14 @@ def dashboard_control_detracciones():
     except Exception:
         pass
 
-    # Desempaquetar dashboard para resetear el orden
+    # Mostrar el header_modulo ANTES de frame_modulo para que aparezca arriba
     try:
-        dashboard_frame.pack_forget()
-    except Exception:
+        header_modulo.pack_forget()
+    except:
         pass
+    header_modulo.pack(fill="x", before=frame_modulo)
 
-    # Mostrar el header_modulo para que aparezca el banner (ARRIBA)
-    header_modulo.pack(fill="x")
-
-    # Mostrar dashboard frame (ABAJO del header)
+    # Mostrar dashboard frame
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
     # Limpiar dashboard
