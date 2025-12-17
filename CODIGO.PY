@@ -4205,12 +4205,18 @@ def dashboard_supervisores():
     except Exception:
         pass
 
-    # Mostrar el header_modulo arriba (side="top") antes del contenido
+    # Desempaquetar TODO de frame_modulo para re-empaquetar en orden correcto
     try:
         header_modulo.pack_forget()
+        toggle_frame.pack_forget()
+        right_frame.pack_forget()
     except:
         pass
+
+    # Empaquetar en orden: PRIMERO header arriba, LUEGO el resto a la izquierda
     header_modulo.pack(side="top", fill="x")
+    toggle_frame.pack(side="left", fill="y")
+    right_frame.pack(side="left", fill="both", expand=True, padx=10, pady=10)
 
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
@@ -7034,12 +7040,18 @@ def dashboard_acciones_inductivas():
     except Exception:
         pass
 
-    # Mostrar el header_modulo arriba (side="top") antes del contenido
+    # Desempaquetar TODO de frame_modulo para re-empaquetar en orden correcto
     try:
         header_modulo.pack_forget()
+        toggle_frame.pack_forget()
+        right_frame.pack_forget()
     except:
         pass
+
+    # Empaquetar en orden: PRIMERO header arriba, LUEGO el resto a la izquierda
     header_modulo.pack(side="top", fill="x")
+    toggle_frame.pack(side="left", fill="y")
+    right_frame.pack(side="left", fill="both", expand=True, padx=10, pady=10)
 
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
@@ -7702,15 +7714,21 @@ def mostrar_dashboard_completo(conexion=None):
     except:
         pass
 
-    # Ocultar banner de módulos (para que no aparezca el banner anterior)
+    # Ocultar menú lateral
+    ocultar_menu()
+
+    # Desempaquetar TODO de frame_modulo para re-empaquetar SIN banner
     try:
         header_modulo.pack_forget()
+        toggle_frame.pack_forget()
+        right_frame.pack_forget()
     except:
         pass
 
-    # Ocultar menú lateral
-    ocultar_menu()
-    
+    # Empaquetar SIN header (solo toggle y right_frame)
+    toggle_frame.pack(side="left", fill="y")
+    right_frame.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+
     dashboard_frame.pack(fill="both", expand=True, padx=0, pady=0)
 
     # Limpiar contenido anterior
@@ -12140,12 +12158,18 @@ def dashboard_control_detracciones():
     except Exception:
         pass
 
-    # Mostrar el header_modulo arriba (side="top") antes del contenido
+    # Desempaquetar TODO de frame_modulo para re-empaquetar en orden correcto
     try:
         header_modulo.pack_forget()
+        toggle_frame.pack_forget()
+        right_frame.pack_forget()
     except:
         pass
+
+    # Empaquetar en orden: PRIMERO header arriba, LUEGO el resto a la izquierda
     header_modulo.pack(side="top", fill="x")
+    toggle_frame.pack(side="left", fill="y")
+    right_frame.pack(side="left", fill="both", expand=True, padx=10, pady=10)
 
     # Mostrar dashboard frame
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
@@ -15353,14 +15377,20 @@ def mostrar_dashboard_metas():
     except:
         pass
 
-    # Ocultar banner de módulos (para que no aparezca el banner anterior)
+    # Ocultar menú lateral
+    ocultar_menu()
+
+    # Desempaquetar TODO de frame_modulo para re-empaquetar SIN banner
     try:
         header_modulo.pack_forget()
+        toggle_frame.pack_forget()
+        right_frame.pack_forget()
     except:
         pass
 
-    # Ocultar menú lateral
-    ocultar_menu()
+    # Empaquetar SIN header (solo toggle y right_frame)
+    toggle_frame.pack(side="left", fill="y")
+    right_frame.pack(side="left", fill="both", expand=True, padx=10, pady=10)
 
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=(5, 10))
     
