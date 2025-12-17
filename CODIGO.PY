@@ -4200,6 +4200,10 @@ def dashboard_supervisores():
         preview_frame.pack_forget()
     except Exception:
         pass
+
+    # Mostrar el header_modulo para que aparezca el banner
+    header_modulo.pack(fill="x")
+
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
     for widget in dashboard_frame.winfo_children():
@@ -7021,6 +7025,10 @@ def dashboard_acciones_inductivas():
         preview_frame.pack_forget()
     except Exception:
         pass
+
+    # Mostrar el header_modulo para que aparezca el banner
+    header_modulo.pack(fill="x")
+
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
     # limpiar contenido previo
@@ -12107,10 +12115,10 @@ def dashboard_control_detracciones():
     Dashboard para mostrar las tablas de Control Saldo Cuenta Detracciones.
     Incluye pestañas para OF (fiscalizaciones1) y AI (fiscalizaciones3).
     """
-    
+
     # Definir colores
     COLOR_WHITE = "#ffffff"
-    
+
     # Ocultar menú
     ocultar_menu()
 
@@ -12119,7 +12127,10 @@ def dashboard_control_detracciones():
         preview_frame.pack_forget()
     except Exception:
         pass
-    
+
+    # Mostrar el header_modulo para que aparezca el banner
+    header_modulo.pack(fill="x")
+
     # Mostrar dashboard frame
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
@@ -15319,7 +15330,22 @@ def mostrar_dashboard_metas():
         preview_frame.pack_forget()
     except Exception:
         pass
-    
+
+    # Ocultar el banner principal
+    try:
+        header.pack_forget()
+    except:
+        pass
+
+    # Ocultar banner de módulos (para que no aparezca el banner anterior)
+    try:
+        header_modulo.pack_forget()
+    except:
+        pass
+
+    # Ocultar menú lateral
+    ocultar_menu()
+
     dashboard_frame.pack(fill="both", expand=True, padx=10, pady=(5, 10))
     
     for widget in dashboard_frame.winfo_children():
