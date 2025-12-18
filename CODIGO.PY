@@ -7973,6 +7973,166 @@ class DataCache:
 data_cache = DataCache()
 
 # ============================================================================
+# FUNCIÓN PARA MOSTRAR GRÁFICO AMPLIADO EN VENTANA EMERGENTE
+# ============================================================================
+
+def mostrar_grafico_ampliado(titulo, fig_original, df_datos=None, tipo_grafico="pastel"):
+    """
+    Muestra un gráfico en una ventana emergente más grande para mejor visualización.
+
+    Args:
+        titulo: Título del gráfico
+        fig_original: Figura matplotlib original (se cerrará y se creará una nueva más grande)
+        df_datos: DataFrame con los datos para regenerar el gráfico
+        tipo_grafico: Tipo de gráfico ("pastel", "barras", "lineas")
+    """
+    popup = ctk.CTkToplevel(app)
+    popup.title(f"📊 {titulo} - Vista Ampliada")
+    popup.geometry("1000x700")
+    popup.transient(app)
+    popup.grab_set()
+
+    # Centrar la ventana
+    popup.update_idletasks()
+    width = popup.winfo_width()
+    height = popup.winfo_height()
+    x = (popup.winfo_screenwidth() // 2) - (width // 2)
+    y = (popup.winfo_screenheight() // 2) - (height // 2)
+    popup.geometry(f'{width}x{height}+{x}+{y}')
+
+    main_frame = ctk.CTkFrame(popup, corner_radius=15, fg_color="#f5f6fa")
+    main_frame.pack(fill="both", expand=True, padx=15, pady=15)
+
+    # Header
+    header_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+    header_frame.pack(fill="x", padx=15, pady=(10, 5))
+
+    ctk.CTkLabel(
+        header_frame,
+        text=f"📊 {titulo}",
+        font=("Arial", 18, "bold"),
+        text_color="#002e6d"
+    ).pack(side="left")
+
+    ctk.CTkButton(
+        header_frame,
+        text="✕ Cerrar",
+        width=100,
+        height=30,
+        fg_color="#EF4444",
+        hover_color="#DC2626",
+        font=("Arial", 11, "bold"),
+        command=popup.destroy
+    ).pack(side="right")
+
+    # Contenedor del gráfico ampliado
+    chart_frame = ctk.CTkFrame(main_frame, fg_color="white", corner_radius=10)
+    chart_frame.pack(fill="both", expand=True, padx=15, pady=15)
+
+    if df_datos is not None and not df_datos.empty:
+        # Crear nuevo gráfico más grande
+        fig_grande, ax_grande = plt.subplots(figsize=(12, 8), facecolor='white')
+
+        if tipo_grafico == "pastel":
+            colores = ['#EC4899', '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B',
+                      '#06B6D4', '#F97316', '#14B8A6', '#8B5CF6', '#F43F5E']
+
+            # Detectar columnas
+            col_valor = [c for c in df_datos.columns if c in ['total', 'cantidad', 'count']]
+            col_etiqueta = [c for c in df_datos.columns if c not in col_valor and df_datos[c].dtype == 'object']
+
+            if col_valor and col_etiqueta:
+                wedges, texts, autotexts = ax_grande.pie(
+                    df_datos[col_valor[0]],
+                    labels=df_datos[col_etiqueta[0]],
+                    autopct='%1.1f%%',
+                    colors=colores[:len(df_datos)],
+                    startangle=90,
+                    wedgeprops=dict(width=0.5, edgecolor='white', linewidth=2)
+                )
+
+                for autotext in autotexts:
+                    autotext.set_color('white')
+                    autotext.set_fontsize(11)
+                    autotext.set_fontweight('bold')
+
+                ax_grande.set_title(titulo, fontsize=14, fontweight='bold', color='#002e6d', pad=20)
+
+        elif tipo_grafico == "barras":
+            col_valor = [c for c in df_datos.columns if df_datos[c].dtype in ['int64', 'float64']]
+            col_etiqueta = [c for c in df_datos.columns if df_datos[c].dtype == 'object']
+
+            if col_valor and col_etiqueta:
+                colores = ['#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6']
+                bars = ax_grande.bar(
+                    df_datos[col_etiqueta[0]],
+                    df_datos[col_valor[0]],
+                    color=colores[:len(df_datos)]
+                )
+                ax_grande.set_xlabel(col_etiqueta[0], fontsize=12)
+                ax_grande.set_ylabel(col_valor[0], fontsize=12)
+                ax_grande.set_title(titulo, fontsize=14, fontweight='bold', color='#002e6d')
+                plt.xticks(rotation=45, ha='right')
+
+                # Añadir valores sobre las barras
+                for bar in bars:
+                    height = bar.get_height()
+                    ax_grande.annotate(f'{int(height):,}',
+                                      xy=(bar.get_x() + bar.get_width() / 2, height),
+                                      xytext=(0, 3),
+                                      textcoords="offset points",
+                                      ha='center', va='bottom', fontsize=10)
+
+        elif tipo_grafico == "lineas":
+            col_valor = [c for c in df_datos.columns if df_datos[c].dtype in ['int64', 'float64']]
+            col_etiqueta = [c for c in df_datos.columns if c not in col_valor]
+
+            if col_valor and col_etiqueta:
+                ax_grande.plot(
+                    df_datos[col_etiqueta[0]],
+                    df_datos[col_valor[0]],
+                    marker='o',
+                    linewidth=3,
+                    markersize=10,
+                    color='#3B82F6'
+                )
+                ax_grande.fill_between(df_datos[col_etiqueta[0]], df_datos[col_valor[0]], alpha=0.3, color='#3B82F6')
+                ax_grande.set_xlabel(col_etiqueta[0], fontsize=12)
+                ax_grande.set_ylabel(col_valor[0], fontsize=12)
+                ax_grande.set_title(titulo, fontsize=14, fontweight='bold', color='#002e6d')
+                ax_grande.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.subplots_adjust(left=0.1, right=0.95, top=0.92, bottom=0.15)
+
+        canvas = FigureCanvasTkAgg(fig_grande, master=chart_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Botones de exportación
+        export_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        export_frame.pack(pady=(0, 10))
+
+        ctk.CTkButton(
+            export_frame,
+            text="💾 Guardar como PNG",
+            width=150,
+            height=35,
+            fg_color="#10B981",
+            hover_color="#059669",
+            font=("Arial", 11, "bold"),
+            command=lambda: exportar_grafico_imagen(fig_grande, titulo.replace(" ", "_"), "Vista ampliada")
+        ).pack(side="left", padx=5)
+    else:
+        ctk.CTkLabel(
+            chart_frame,
+            text="No hay datos disponibles para mostrar",
+            font=("Arial", 14),
+            text_color="#9CA3AF"
+        ).pack(expand=True)
+
+
+# ============================================================================
 # FUNCIÓN PRINCIPAL DEL DASHBOARD
 # ============================================================================
 
@@ -8572,8 +8732,21 @@ def mostrar_dashboard_completo(conexion=None):
                         font=("Arial", 9, "bold"),
                         command=lambda: exportar_datos_excel(query_det_completa, "OF_Determinativas_Datos", filtros_texto)
                     ).pack(side="left", padx=3)
+
+                    # Botón expandir gráfico
+                    df_det_copy = df_det.copy()
+                    ctk.CTkButton(
+                        export_frame_det,
+                        text="🔍 Ampliar",
+                        width=90,
+                        height=28,
+                        fg_color="#8B5CF6",
+                        hover_color="#7C3AED",
+                        font=("Arial", 9, "bold"),
+                        command=lambda: mostrar_grafico_ampliado("OF Determinativas (Tipo 06)", fig_det, df_det_copy, "pastel")
+                    ).pack(side="left", padx=3)
                 else:
-                    ctk.CTkLabel(frame_determinativas, text="Sin datos disponibles", 
+                    ctk.CTkLabel(frame_determinativas, text="Sin datos disponibles",
                                 font=("Arial", 11), text_color="#9CA3AF").pack(pady=50)
                     
             except Exception as e:
@@ -8864,8 +9037,24 @@ def mostrar_dashboard_completo(conexion=None):
                         font=("Arial", 9, "bold"),
                         command=lambda: exportar_datos_excel(query_prog_completa, "Progreso_Determinativas_Datos", filtros_texto)
                     ).pack(side="left", padx=3)
+
+                    # Botón expandir gráfico - crear DataFrame con meses y valores
+                    df_prog_expand = pd.DataFrame({
+                        'Mes': ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
+                        'total': valores
+                    })
+                    ctk.CTkButton(
+                        export_frame_prog,
+                        text="🔍 Ampliar",
+                        width=90,
+                        height=28,
+                        fg_color="#8B5CF6",
+                        hover_color="#7C3AED",
+                        font=("Arial", 9, "bold"),
+                        command=lambda df=df_prog_expand: mostrar_grafico_ampliado("Progreso Mensual - Determinativas", fig_prog, df, "lineas")
+                    ).pack(side="left", padx=3)
                 else:
-                    ctk.CTkLabel(frame_progreso_det, text="Sin datos disponibles", 
+                    ctk.CTkLabel(frame_progreso_det, text="Sin datos disponibles",
                                 font=("Arial", 10), text_color="#9CA3AF").pack(pady=50)
                     
             except Exception as e:
@@ -9052,10 +9241,23 @@ def mostrar_dashboard_completo(conexion=None):
                         font=("Arial", 9, "bold"),
                         command=lambda: exportar_datos_excel(query_no_det_completa, "OF_No_Determinativas_Datos", filtros_texto)
                     ).pack(side="left", padx=3)
+
+                    # Botón expandir gráfico
+                    df_no_det_copy = df_no_det.copy()
+                    ctk.CTkButton(
+                        export_frame_no_det,
+                        text="🔍 Ampliar",
+                        width=90,
+                        height=28,
+                        fg_color="#8B5CF6",
+                        hover_color="#7C3AED",
+                        font=("Arial", 9, "bold"),
+                        command=lambda: mostrar_grafico_ampliado("OF No Determinativas", fig_no_det, df_no_det_copy, "pastel")
+                    ).pack(side="left", padx=3)
                 else:
-                    ctk.CTkLabel(frame_no_determinativas, text="Sin datos disponibles", 
+                    ctk.CTkLabel(frame_no_determinativas, text="Sin datos disponibles",
                                 font=("Arial", 11), text_color="#9CA3AF").pack(pady=50)
-                    
+
             except Exception as e:
                 print(f"Error en no determinativas: {e}")
                 ctk.CTkLabel(frame_no_determinativas, text=f"Error: {str(e)}", 
@@ -9343,10 +9545,26 @@ def mostrar_dashboard_completo(conexion=None):
                         font=("Arial", 9, "bold"),
                         command=lambda: exportar_datos_excel(query_prog_no_completa, "Progreso_No_Determinativas_Datos", filtros_texto)
                     ).pack(side="left", padx=3)
+
+                    # Botón expandir gráfico
+                    df_prog_no_expand = pd.DataFrame({
+                        'Mes': ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
+                        'total': valores
+                    })
+                    ctk.CTkButton(
+                        export_frame_prog_no,
+                        text="🔍 Ampliar",
+                        width=90,
+                        height=28,
+                        fg_color="#8B5CF6",
+                        hover_color="#7C3AED",
+                        font=("Arial", 9, "bold"),
+                        command=lambda df=df_prog_no_expand: mostrar_grafico_ampliado("Progreso Mensual - No Determinativas", fig_prog_no, df, "lineas")
+                    ).pack(side="left", padx=3)
                 else:
-                    ctk.CTkLabel(frame_progreso_no_det, text="Sin datos disponibles", 
+                    ctk.CTkLabel(frame_progreso_no_det, text="Sin datos disponibles",
                                 font=("Arial", 10), text_color="#9CA3AF").pack(pady=50)
-                    
+
             except Exception as e:
                 print(f"Error en progreso no determinativas: {e}")
                 import traceback
@@ -9530,6 +9748,19 @@ def mostrar_dashboard_completo(conexion=None):
                         hover_color="#D97706",
                         font=("Arial", 9, "bold"),
                         command=lambda: exportar_datos_excel(query_stock_completa, "Stock_Tipos_Datos", filtros_texto)
+                    ).pack(side="left", padx=3)
+
+                    # Botón expandir gráfico
+                    df_stock_copy = df_stock.copy()
+                    ctk.CTkButton(
+                        export_frame_stock,
+                        text="🔍 Ampliar",
+                        width=90,
+                        height=28,
+                        fg_color="#8B5CF6",
+                        hover_color="#7C3AED",
+                        font=("Arial", 9, "bold"),
+                        command=lambda: mostrar_grafico_ampliado("Stock - Distribución por Tipo", fig_stock, df_stock_copy, "pastel")
                     ).pack(side="left", padx=3)
                 else:
                     ctk.CTkLabel(frame_stock_pastel, text="Sin datos disponibles",
@@ -9868,6 +10099,19 @@ def mostrar_dashboard_completo(conexion=None):
                         hover_color="#D97706",
                         font=("Arial", 9, "bold"),
                         command=lambda: exportar_datos_excel(query_completa, "Stock_Mensual_Datos", filtros_texto)
+                    ).pack(side="left", padx=3)
+
+                    # Botón expandir gráfico
+                    df_barras_copy = df_barras.copy()
+                    ctk.CTkButton(
+                        export_frame,
+                        text="🔍 Ampliar",
+                        width=90,
+                        height=28,
+                        fg_color="#8B5CF6",
+                        hover_color="#7C3AED",
+                        font=("Arial", 9, "bold"),
+                        command=lambda: mostrar_grafico_ampliado("Stock - Evolución Mensual", fig_barras, df_barras_copy, "barras")
                     ).pack(side="left", padx=3)
                 else:
                     ctk.CTkLabel(frame_stock_barras, text="Sin datos disponibles",
@@ -10229,6 +10473,19 @@ def mostrar_dashboard_completo(conexion=None):
                         hover_color="#D97706",
                         font=("Arial", 9, "bold"),
                         command=lambda: exportar_datos_excel(query_completa, "Rendimiento_Mensual_Datos", filtros_texto)
+                    ).pack(side="left", padx=3)
+
+                    # Botón expandir gráfico
+                    df_rend_copy = df_rend.copy()
+                    ctk.CTkButton(
+                        export_frame_rend,
+                        text="🔍 Ampliar",
+                        width=90,
+                        height=28,
+                        fg_color="#8B5CF6",
+                        hover_color="#7C3AED",
+                        font=("Arial", 9, "bold"),
+                        command=lambda: mostrar_grafico_ampliado("Rendimiento Mensual", fig_rend, df_rend_copy, "barras")
                     ).pack(side="left", padx=3)
                 else:
                     ctk.CTkLabel(frame_rendimiento, text="Sin datos disponibles",
