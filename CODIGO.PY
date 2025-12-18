@@ -17257,10 +17257,10 @@ def mostrar_dashboard_metas():
 # FUNCIONES PREVIEW y OTROS
 # ==========================
 def actualizar_barra():
-    try:
-        barra_label.configure(text=f"Última actualización: {ultima_actualizacion}")
-    except Exception:
-        pass
+    """Función para actualizar etiqueta de última actualización (si existe)"""
+    # La etiqueta barra_label no está definida en la interfaz actual
+    # Se mantiene la función por compatibilidad pero no hace nada
+    pass
 
 def mostrar_datos():
     try:
