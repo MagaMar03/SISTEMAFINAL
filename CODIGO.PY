@@ -244,7 +244,19 @@ descarga_frame.pack(fill="x", pady=(5,5), padx=10)
 
 descarga_label = ctk.CTkLabel(descarga_frame, text="📥 Descargar Tablas:",
                               font=("Segoe UI", 12, "bold"), text_color=COLOR_TEXT)
-descarga_label.pack(side="left", padx=(10,15), pady=8)
+descarga_label.pack(pady=(8,5))
+
+# Contenedor para centrar los botones
+botones_container = ctk.CTkFrame(descarga_frame, fg_color="transparent")
+botones_container.pack(pady=(0,8))
+
+# Colores alternados: Guindo (SUNAT) y Azul
+COLOR_GUINDO = "#8B1538"
+COLOR_GUINDO_HOVER = "#6B102B"
+COLOR_AZUL_SUNAT = "#1E3A8A"
+COLOR_AZUL_HOVER = "#152E6B"
+COLOR_PLOMO = "#6B7280"
+COLOR_PLOMO_HOVER = "#4B5563"
 
 def exportar_tabla(nombre_tabla, nombre_archivo):
     """Exporta una tabla de la base de datos a Excel"""
@@ -269,41 +281,85 @@ def exportar_tabla(nombre_tabla, nombre_archivo):
     except Exception as e:
         messagebox.showerror("Error", f"No se pudo exportar la tabla:\n{e}")
 
-# Botones de descarga
-btn_of = ctk.CTkButton(descarga_frame, text="OF", width=60, height=28,
-                       fg_color="#3B82F6", hover_color="#2563EB", font=("Segoe UI", 11),
+def exportar_todas_tablas():
+    """Exporta todas las tablas en un solo archivo Excel con diferentes hojas"""
+    try:
+        tablas = [
+            ("fiscalizaciones1", "OF"),
+            ("fiscalizaciones2", "OF-Recaudacion"),
+            ("fiscalizaciones3", "AI"),
+            ("fiscalizaciones4", "OF-Detracciones"),
+            ("mypes", "RUCS-MYPES"),
+            ("fiscalizaciones5", "AI-Recaudacion"),
+            ("distribucion", "Distribucion-Auditores")
+        ]
+
+        # Abrir diálogo para guardar archivo
+        archivo = fd.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel", "*.xlsx")],
+            initialfile=f"TODAS_TABLAS_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        )
+
+        if archivo:
+            with pd.ExcelWriter(archivo, engine='openpyxl') as writer:
+                for nombre_tabla, nombre_hoja in tablas:
+                    try:
+                        query = f"SELECT * FROM {nombre_tabla}"
+                        df = pd.read_sql(query, DB_ENGINE)
+                        df.to_excel(writer, sheet_name=nombre_hoja, index=False)
+                    except Exception as e:
+                        print(f"Error al exportar {nombre_tabla}: {e}")
+
+            messagebox.showinfo("Éxito", f"Todas las tablas exportadas correctamente:\n{archivo}")
+    except Exception as e:
+        messagebox.showerror("Error", f"No se pudo exportar las tablas:\n{e}")
+
+# Botones de descarga con colores alternados (Guindo y Azul)
+btn_of = ctk.CTkButton(botones_container, text="OF", width=70, height=28,
+                       fg_color=COLOR_GUINDO, hover_color=COLOR_GUINDO_HOVER, font=("Segoe UI", 11),
                        command=lambda: exportar_tabla("fiscalizaciones1", "OF"))
-btn_of.pack(side="left", padx=3, pady=8)
+btn_of.pack(side="left", padx=3)
 
-btn_ofr = ctk.CTkButton(descarga_frame, text="OF-Recaudación", width=110, height=28,
-                        fg_color="#10B981", hover_color="#059669", font=("Segoe UI", 11),
+btn_ofr = ctk.CTkButton(botones_container, text="OF-Recaudación", width=115, height=28,
+                        fg_color=COLOR_AZUL_SUNAT, hover_color=COLOR_AZUL_HOVER, font=("Segoe UI", 11),
                         command=lambda: exportar_tabla("fiscalizaciones2", "OF_Recaudacion"))
-btn_ofr.pack(side="left", padx=3, pady=8)
+btn_ofr.pack(side="left", padx=3)
 
-btn_ai = ctk.CTkButton(descarga_frame, text="AI", width=60, height=28,
-                       fg_color="#8B5CF6", hover_color="#7C3AED", font=("Segoe UI", 11),
+btn_ai = ctk.CTkButton(botones_container, text="AI", width=70, height=28,
+                       fg_color=COLOR_GUINDO, hover_color=COLOR_GUINDO_HOVER, font=("Segoe UI", 11),
                        command=lambda: exportar_tabla("fiscalizaciones3", "AI"))
-btn_ai.pack(side="left", padx=3, pady=8)
+btn_ai.pack(side="left", padx=3)
 
-btn_dtr = ctk.CTkButton(descarga_frame, text="OF Detracciones", width=110, height=28,
-                        fg_color="#F59E0B", hover_color="#D97706", font=("Segoe UI", 11),
+btn_dtr = ctk.CTkButton(botones_container, text="OF Detracciones", width=115, height=28,
+                        fg_color=COLOR_AZUL_SUNAT, hover_color=COLOR_AZUL_HOVER, font=("Segoe UI", 11),
                         command=lambda: exportar_tabla("fiscalizaciones4", "OF_Detracciones"))
-btn_dtr.pack(side="left", padx=3, pady=8)
+btn_dtr.pack(side="left", padx=3)
 
-btn_mypes = ctk.CTkButton(descarga_frame, text="RUCS MYPES", width=100, height=28,
-                          fg_color="#EF4444", hover_color="#DC2626", font=("Segoe UI", 11),
+btn_mypes = ctk.CTkButton(botones_container, text="RUCS MYPES", width=100, height=28,
+                          fg_color=COLOR_GUINDO, hover_color=COLOR_GUINDO_HOVER, font=("Segoe UI", 11),
                           command=lambda: exportar_tabla("mypes", "RUCS_MYPES"))
-btn_mypes.pack(side="left", padx=3, pady=8)
+btn_mypes.pack(side="left", padx=3)
 
-btn_air = ctk.CTkButton(descarga_frame, text="AI-Recaudación", width=110, height=28,
-                        fg_color="#EC4899", hover_color="#DB2777", font=("Segoe UI", 11),
+btn_air = ctk.CTkButton(botones_container, text="AI-Recaudación", width=115, height=28,
+                        fg_color=COLOR_AZUL_SUNAT, hover_color=COLOR_AZUL_HOVER, font=("Segoe UI", 11),
                         command=lambda: exportar_tabla("fiscalizaciones5", "AI_Recaudacion"))
-btn_air.pack(side="left", padx=3, pady=8)
+btn_air.pack(side="left", padx=3)
 
-btn_dist = ctk.CTkButton(descarga_frame, text="Distribución Auditores", width=140, height=28,
-                         fg_color="#6366F1", hover_color="#4F46E5", font=("Segoe UI", 11),
+btn_dist = ctk.CTkButton(botones_container, text="Distribución Auditores", width=140, height=28,
+                         fg_color=COLOR_GUINDO, hover_color=COLOR_GUINDO_HOVER, font=("Segoe UI", 11),
                          command=lambda: exportar_tabla("distribucion", "Distribucion_Auditores"))
-btn_dist.pack(side="left", padx=3, pady=8)
+btn_dist.pack(side="left", padx=3)
+
+# Separador
+sep_label = ctk.CTkLabel(botones_container, text="|", font=("Segoe UI", 14), text_color="#9CA3AF")
+sep_label.pack(side="left", padx=8)
+
+# Botón para descargar todas las tablas
+btn_todas = ctk.CTkButton(botones_container, text="📦 Descargar Todo", width=130, height=28,
+                          fg_color=COLOR_PLOMO, hover_color=COLOR_PLOMO_HOVER, font=("Segoe UI", 11, "bold"),
+                          command=exportar_todas_tablas)
+btn_todas.pack(side="left", padx=3)
 
 table_frame = ctk.CTkFrame(preview_frame, fg_color=COLOR_WHITE, corner_radius=10)
 table_frame.pack(fill="both", expand=True, padx=10, pady=(5,10))
