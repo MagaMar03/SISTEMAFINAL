@@ -8775,31 +8775,31 @@ def mostrar_dashboard_completo(conexion=None):
                         else:
                             valores.append(0)
                     
-                    fig_prog, ax_prog = plt.subplots(figsize=(5, 3.5), facecolor='white')
-                    
+                    fig_prog, ax_prog = plt.subplots(figsize=(6, 4), facecolor='white')
+
                     ax_prog.fill_between(meses, valores, alpha=0.3, color='#8B5CF6', linewidth=0)
-                    ax_prog.plot(meses, valores, color='#8B5CF6', linewidth=2.5, marker='o', 
-                                markersize=6, markerfacecolor='#8B5CF6', markeredgecolor='white', 
+                    ax_prog.plot(meses, valores, color='#8B5CF6', linewidth=2.5, marker='o',
+                                markersize=6, markerfacecolor='#8B5CF6', markeredgecolor='white',
                                 markeredgewidth=2)
-                    
+
                     ax_prog.set_xlabel('Mes', fontsize=9, fontweight='bold')
                     ax_prog.set_ylabel('Casos Resueltos', fontsize=9, fontweight='bold')
                     ax_prog.set_xticks(meses)
-                    ax_prog.set_xticklabels(['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 
-                                             'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'], 
+                    ax_prog.set_xticklabels(['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+                                             'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
                                             fontsize=8)
                     ax_prog.grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
                     ax_prog.set_facecolor('#F9FAFB')
-                    
+
                     max_val = max(valores) if valores else 1
                     ax_prog.set_ylim(0, max_val * 1.1)
-                    
+
                     ax_prog.spines['top'].set_visible(False)
                     ax_prog.spines['right'].set_visible(False)
                     ax_prog.spines['left'].set_color('#D1D5DB')
                     ax_prog.spines['bottom'].set_color('#D1D5DB')
 
-                    plt.tight_layout()
+                    plt.subplots_adjust(left=0.15, right=0.95, top=0.95, bottom=0.15)
 
                     # Agregar tooltips interactivos
                     cursor = mplcursors.cursor(ax_prog, hover=True)
@@ -9254,31 +9254,31 @@ def mostrar_dashboard_completo(conexion=None):
                         else:
                             valores.append(0)
                     
-                    fig_prog_no, ax_prog_no = plt.subplots(figsize=(5, 3.5), facecolor='white')
-                    
+                    fig_prog_no, ax_prog_no = plt.subplots(figsize=(6, 4), facecolor='white')
+
                     ax_prog_no.fill_between(meses, valores, alpha=0.3, color='#06B6D4', linewidth=0)
-                    ax_prog_no.plot(meses, valores, color='#06B6D4', linewidth=2.5, marker='o', 
-                                   markersize=6, markerfacecolor='#06B6D4', markeredgecolor='white', 
+                    ax_prog_no.plot(meses, valores, color='#06B6D4', linewidth=2.5, marker='o',
+                                   markersize=6, markerfacecolor='#06B6D4', markeredgecolor='white',
                                    markeredgewidth=2)
-                    
+
                     ax_prog_no.set_xlabel('Mes', fontsize=9, fontweight='bold')
                     ax_prog_no.set_ylabel('Casos Resueltos', fontsize=9, fontweight='bold')
                     ax_prog_no.set_xticks(meses)
-                    ax_prog_no.set_xticklabels(['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 
-                                                'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'], 
+                    ax_prog_no.set_xticklabels(['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+                                                'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
                                                fontsize=8)
                     ax_prog_no.grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
                     ax_prog_no.set_facecolor('#F9FAFB')
-                    
+
                     max_val = max(valores) if valores else 1
                     ax_prog_no.set_ylim(0, max_val * 1.1)
-                    
+
                     ax_prog_no.spines['top'].set_visible(False)
                     ax_prog_no.spines['right'].set_visible(False)
                     ax_prog_no.spines['left'].set_color('#D1D5DB')
                     ax_prog_no.spines['bottom'].set_color('#D1D5DB')
 
-                    plt.tight_layout()
+                    plt.subplots_adjust(left=0.15, right=0.95, top=0.95, bottom=0.15)
 
                     # Agregar tooltips interactivos
                     cursor = mplcursors.cursor(ax_prog_no, hover=True)
@@ -9783,7 +9783,7 @@ def mostrar_dashboard_completo(conexion=None):
                                 valores.append(0)
                         datos_tipos[tipo] = valores
 
-                    fig_barras, ax_barras = plt.subplots(figsize=(5, 3.5), facecolor='white')
+                    fig_barras, ax_barras = plt.subplots(figsize=(6, 4), facecolor='white')
 
                     x = np.arange(len(meses))
                     width = 0.25
@@ -9806,7 +9806,7 @@ def mostrar_dashboard_completo(conexion=None):
                     ax_barras.spines['top'].set_visible(False)
                     ax_barras.spines['right'].set_visible(False)
 
-                    plt.tight_layout()
+                    plt.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.15)
 
                     # Agregar tooltips interactivos
                     cursor = mplcursors.cursor(ax_barras, hover=True)
