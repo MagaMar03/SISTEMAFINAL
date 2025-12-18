@@ -341,8 +341,64 @@ COLOR_AZUL_HOVER = "#152E6B"
 COLOR_PLOMO = "#6B7280"
 COLOR_PLOMO_HOVER = "#4B5563"
 
+def formatear_hoja_excel(ws, df):
+    """Aplica formato elegante a una hoja de Excel: tabla, filtros y autoajuste de columnas"""
+    from openpyxl.worksheet.table import Table, TableStyleInfo
+    from openpyxl.utils import get_column_letter
+
+    if df.empty:
+        return
+
+    # Calcular rango de la tabla
+    num_filas = len(df) + 1  # +1 por el encabezado
+    num_columnas = len(df.columns)
+
+    if num_columnas == 0:
+        return
+
+    # Definir el rango de la tabla
+    rango_tabla = f"A1:{get_column_letter(num_columnas)}{num_filas}"
+
+    # Crear nombre único para la tabla
+    nombre_tabla_excel = f"Tabla_{ws.title.replace('-', '_').replace(' ', '_')}_{datetime.now().strftime('%H%M%S')}"
+
+    # Crear la tabla con estilo
+    tabla = Table(displayName=nombre_tabla_excel, ref=rango_tabla)
+
+    # Estilo de tabla elegante (azul medio)
+    estilo = TableStyleInfo(
+        name="TableStyleMedium9",
+        showFirstColumn=False,
+        showLastColumn=False,
+        showRowStripes=True,
+        showColumnStripes=False
+    )
+    tabla.tableStyleInfo = estilo
+
+    # Agregar la tabla a la hoja
+    ws.add_table(tabla)
+
+    # Autoajustar ancho de columnas
+    for col_idx, column in enumerate(df.columns, 1):
+        col_letter = get_column_letter(col_idx)
+
+        # Calcular el ancho máximo
+        max_length = len(str(column))  # Longitud del encabezado
+
+        for row in ws.iter_rows(min_row=2, max_row=num_filas, min_col=col_idx, max_col=col_idx):
+            for cell in row:
+                try:
+                    if cell.value:
+                        max_length = max(max_length, len(str(cell.value)))
+                except:
+                    pass
+
+        # Ajustar ancho (con un pequeño margen)
+        adjusted_width = min(max_length + 2, 50)  # Máximo 50 caracteres
+        ws.column_dimensions[col_letter].width = adjusted_width
+
 def exportar_tabla(nombre_tabla, nombre_archivo):
-    """Exporta una tabla de la base de datos a Excel"""
+    """Exporta una tabla de la base de datos a Excel con formato elegante"""
     try:
         query = f"SELECT * FROM {nombre_tabla}"
         df = pd.read_sql(query, DB_ENGINE)
@@ -359,13 +415,18 @@ def exportar_tabla(nombre_tabla, nombre_archivo):
         )
 
         if archivo:
-            df.to_excel(archivo, index=False)
+            # Exportar con formato elegante
+            with pd.ExcelWriter(archivo, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name=nombre_archivo[:31], index=False)
+                ws = writer.sheets[nombre_archivo[:31]]
+                formatear_hoja_excel(ws, df)
+
             messagebox.showinfo("Éxito", f"Tabla exportada correctamente:\n{archivo}")
     except Exception as e:
         messagebox.showerror("Error", f"No se pudo exportar la tabla:\n{e}")
 
 def exportar_todas_tablas():
-    """Exporta todas las tablas en un solo archivo Excel con diferentes hojas"""
+    """Exporta todas las tablas en un solo archivo Excel con diferentes hojas y formato elegante"""
     try:
         tablas = [
             ("fiscalizaciones1", "OF"),
@@ -374,7 +435,7 @@ def exportar_todas_tablas():
             ("fiscalizaciones4", "OF-Detracciones"),
             ("mypes", "RUCS-MYPES"),
             ("fiscalizaciones5", "AI-Recaudacion"),
-            ("distribucion", "Distribucion-Auditores")
+            ("distribucion", "Distrib-Auditores")
         ]
 
         # Abrir diálogo para guardar archivo
@@ -385,14 +446,24 @@ def exportar_todas_tablas():
         )
 
         if archivo:
+            # Diccionario para guardar los DataFrames
+            dataframes = {}
+
             with pd.ExcelWriter(archivo, engine='openpyxl') as writer:
                 for nombre_tabla, nombre_hoja in tablas:
                     try:
                         query = f"SELECT * FROM {nombre_tabla}"
                         df = pd.read_sql(query, DB_ENGINE)
                         df.to_excel(writer, sheet_name=nombre_hoja, index=False)
+                        dataframes[nombre_hoja] = df
                     except Exception as e:
                         print(f"Error al exportar {nombre_tabla}: {e}")
+
+                # Aplicar formato a cada hoja
+                for nombre_hoja, df in dataframes.items():
+                    if nombre_hoja in writer.sheets:
+                        ws = writer.sheets[nombre_hoja]
+                        formatear_hoja_excel(ws, df)
 
             messagebox.showinfo("Éxito", f"Todas las tablas exportadas correctamente:\n{archivo}")
     except Exception as e:
