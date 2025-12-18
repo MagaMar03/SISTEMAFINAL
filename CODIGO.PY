@@ -234,9 +234,92 @@ dashboard_frame.pack_forget()  # inicialmente oculto
 fecha_frame = ctk.CTkFrame(preview_frame, fg_color=COLOR_SUBBOX, corner_radius=10)
 fecha_frame.pack(fill="x", pady=(10,5), padx=10)
 
-barra_label = ctk.CTkLabel(fecha_frame, text="Última actualización: Sin datos",
-                           font=("Segoe UI", 14), text_color=COLOR_TEXT)
-barra_label.pack(padx=10, pady=10)
+# Título de última actualización
+titulo_actualizacion = ctk.CTkLabel(fecha_frame, text="📅 Última Actualización por Tabla:",
+                                     font=("Segoe UI", 13, "bold"), text_color=COLOR_TEXT)
+titulo_actualizacion.pack(padx=10, pady=(10,5))
+
+# Frame para mostrar las fechas de cada tabla en línea
+fechas_container = ctk.CTkFrame(fecha_frame, fg_color="transparent")
+fechas_container.pack(padx=10, pady=(0,10))
+
+# Diccionario para almacenar los labels de fechas
+labels_fechas = {}
+
+def crear_labels_fechas():
+    """Crea los labels para mostrar las fechas de actualización de cada tabla"""
+    tablas_info = [
+        ("fiscalizaciones1", "OF"),
+        ("fiscalizaciones2", "OF-Recaud."),
+        ("fiscalizaciones3", "AI"),
+        ("fiscalizaciones4", "OF-Detracc."),
+        ("mypes", "MYPES"),
+        ("fiscalizaciones5", "AI-Recaud."),
+        ("distribucion", "Distrib.")
+    ]
+
+    for nombre_tabla, nombre_corto in tablas_info:
+        frame_item = ctk.CTkFrame(fechas_container, fg_color="#E5E7EB", corner_radius=5)
+        frame_item.pack(side="left", padx=3, pady=2)
+
+        label_nombre = ctk.CTkLabel(frame_item, text=f"{nombre_corto}:",
+                                    font=("Segoe UI", 10, "bold"), text_color="#374151")
+        label_nombre.pack(side="left", padx=(5,2), pady=3)
+
+        label_fecha = ctk.CTkLabel(frame_item, text="Sin datos",
+                                   font=("Segoe UI", 10), text_color="#6B7280")
+        label_fecha.pack(side="left", padx=(0,5), pady=3)
+
+        labels_fechas[nombre_tabla] = label_fecha
+
+def cargar_fechas_actualizacion():
+    """Carga las fechas de actualización desde la base de datos"""
+    try:
+        query = "SELECT nombre_tabla, fecha_actualizacion FROM actualizaciones_tablas"
+        df = pd.read_sql(query, DB_ENGINE)
+
+        for _, row in df.iterrows():
+            nombre_tabla = row['nombre_tabla']
+            fecha = row['fecha_actualizacion']
+
+            if nombre_tabla in labels_fechas:
+                if pd.notna(fecha):
+                    fecha_str = fecha.strftime('%d/%m/%y %H:%M')
+                    labels_fechas[nombre_tabla].configure(text=fecha_str, text_color="#059669")
+                else:
+                    labels_fechas[nombre_tabla].configure(text="Sin datos", text_color="#6B7280")
+    except Exception as e:
+        print(f"Error al cargar fechas: {e}")
+
+def registrar_actualizacion(nombre_tabla, registros=0):
+    """Registra la fecha de actualización de una tabla"""
+    try:
+        conn = mysql.connector.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+
+        query = """
+            UPDATE actualizaciones_tablas
+            SET fecha_actualizacion = %s, registros_cargados = %s
+            WHERE nombre_tabla = %s
+        """
+        cursor.execute(query, (datetime.now(), registros, nombre_tabla))
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        # Actualizar el label correspondiente
+        cargar_fechas_actualizacion()
+    except Exception as e:
+        print(f"Error al registrar actualización: {e}")
+
+# Crear los labels al iniciar
+crear_labels_fechas()
+
+# Cargar las fechas existentes
+try:
+    cargar_fechas_actualizacion()
+except:
+    pass
 
 # --- Panel de descarga de tablas ---
 descarga_frame = ctk.CTkFrame(preview_frame, fg_color=COLOR_SUBBOX, corner_radius=10)
@@ -315,39 +398,46 @@ def exportar_todas_tablas():
     except Exception as e:
         messagebox.showerror("Error", f"No se pudo exportar las tablas:\n{e}")
 
-# Botones de descarga con colores alternados (Guindo y Azul)
+# Botones de descarga con colores alternados (Guindo y Azul) - Texto blanco negrita
 btn_of = ctk.CTkButton(botones_container, text="OF", width=70, height=28,
-                       fg_color=COLOR_GUINDO, hover_color=COLOR_GUINDO_HOVER, font=("Segoe UI", 11),
+                       fg_color=COLOR_GUINDO, hover_color=COLOR_GUINDO_HOVER,
+                       font=("Segoe UI", 11, "bold"), text_color="white",
                        command=lambda: exportar_tabla("fiscalizaciones1", "OF"))
 btn_of.pack(side="left", padx=3)
 
 btn_ofr = ctk.CTkButton(botones_container, text="OF-Recaudación", width=115, height=28,
-                        fg_color=COLOR_AZUL_SUNAT, hover_color=COLOR_AZUL_HOVER, font=("Segoe UI", 11),
+                        fg_color=COLOR_AZUL_SUNAT, hover_color=COLOR_AZUL_HOVER,
+                        font=("Segoe UI", 11, "bold"), text_color="white",
                         command=lambda: exportar_tabla("fiscalizaciones2", "OF_Recaudacion"))
 btn_ofr.pack(side="left", padx=3)
 
 btn_ai = ctk.CTkButton(botones_container, text="AI", width=70, height=28,
-                       fg_color=COLOR_GUINDO, hover_color=COLOR_GUINDO_HOVER, font=("Segoe UI", 11),
+                       fg_color=COLOR_GUINDO, hover_color=COLOR_GUINDO_HOVER,
+                       font=("Segoe UI", 11, "bold"), text_color="white",
                        command=lambda: exportar_tabla("fiscalizaciones3", "AI"))
 btn_ai.pack(side="left", padx=3)
 
 btn_dtr = ctk.CTkButton(botones_container, text="OF Detracciones", width=115, height=28,
-                        fg_color=COLOR_AZUL_SUNAT, hover_color=COLOR_AZUL_HOVER, font=("Segoe UI", 11),
+                        fg_color=COLOR_AZUL_SUNAT, hover_color=COLOR_AZUL_HOVER,
+                        font=("Segoe UI", 11, "bold"), text_color="white",
                         command=lambda: exportar_tabla("fiscalizaciones4", "OF_Detracciones"))
 btn_dtr.pack(side="left", padx=3)
 
 btn_mypes = ctk.CTkButton(botones_container, text="RUCS MYPES", width=100, height=28,
-                          fg_color=COLOR_GUINDO, hover_color=COLOR_GUINDO_HOVER, font=("Segoe UI", 11),
+                          fg_color=COLOR_GUINDO, hover_color=COLOR_GUINDO_HOVER,
+                          font=("Segoe UI", 11, "bold"), text_color="white",
                           command=lambda: exportar_tabla("mypes", "RUCS_MYPES"))
 btn_mypes.pack(side="left", padx=3)
 
 btn_air = ctk.CTkButton(botones_container, text="AI-Recaudación", width=115, height=28,
-                        fg_color=COLOR_AZUL_SUNAT, hover_color=COLOR_AZUL_HOVER, font=("Segoe UI", 11),
+                        fg_color=COLOR_AZUL_SUNAT, hover_color=COLOR_AZUL_HOVER,
+                        font=("Segoe UI", 11, "bold"), text_color="white",
                         command=lambda: exportar_tabla("fiscalizaciones5", "AI_Recaudacion"))
 btn_air.pack(side="left", padx=3)
 
 btn_dist = ctk.CTkButton(botones_container, text="Distribución Auditores", width=140, height=28,
-                         fg_color=COLOR_GUINDO, hover_color=COLOR_GUINDO_HOVER, font=("Segoe UI", 11),
+                         fg_color=COLOR_GUINDO, hover_color=COLOR_GUINDO_HOVER,
+                         font=("Segoe UI", 11, "bold"), text_color="white",
                          command=lambda: exportar_tabla("distribucion", "Distribucion_Auditores"))
 btn_dist.pack(side="left", padx=3)
 
@@ -357,7 +447,8 @@ sep_label.pack(side="left", padx=8)
 
 # Botón para descargar todas las tablas
 btn_todas = ctk.CTkButton(botones_container, text="📦 Descargar Todo", width=130, height=28,
-                          fg_color=COLOR_PLOMO, hover_color=COLOR_PLOMO_HOVER, font=("Segoe UI", 11, "bold"),
+                          fg_color=COLOR_PLOMO, hover_color=COLOR_PLOMO_HOVER,
+                          font=("Segoe UI", 11, "bold"), text_color="white",
                           command=exportar_todas_tablas)
 btn_todas.pack(side="left", padx=3)
 
@@ -527,6 +618,9 @@ def subir_excel():
         ultima_actualizacion = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         actualizar_barra()
         mostrar_datos()
+
+        # Registrar la fecha de actualización de la tabla
+        registrar_actualizacion(tabla, len(df))
 
         messagebox.showinfo(
             "Carga completa",
