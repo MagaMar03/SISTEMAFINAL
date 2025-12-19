@@ -68,6 +68,233 @@ def guardar_config():
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=4)
 
+# ==========================
+# SISTEMA DE OPTIMIZACIÓN DE RENDIMIENTO
+# ==========================
+import threading
+from queue import Queue
+from concurrent.futures import ThreadPoolExecutor
+import functools
+
+# Pool de conexiones MySQL (reutiliza conexiones en lugar de crear nuevas)
+class ConnectionPool:
+    """Pool de conexiones MySQL para reutilización eficiente"""
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._pool = Queue(maxsize=10)
+                    cls._instance._created = 0
+                    cls._instance._max_connections = 10
+        return cls._instance
+
+    def get_connection(self):
+        """Obtiene una conexión del pool o crea una nueva"""
+        try:
+            if not self._pool.empty():
+                conn = self._pool.get_nowait()
+                if conn.is_connected():
+                    return conn
+                else:
+                    conn.close()
+        except:
+            pass
+
+        # Crear nueva conexión
+        try:
+            conn = mysql.connector.connect(**DB_CONFIG)
+            self._created += 1
+            return conn
+        except Exception as e:
+            print(f"Error creando conexión: {e}")
+            return None
+
+    def return_connection(self, conn):
+        """Devuelve una conexión al pool"""
+        try:
+            if conn and conn.is_connected():
+                if self._pool.qsize() < self._max_connections:
+                    self._pool.put_nowait(conn)
+                else:
+                    conn.close()
+        except:
+            try:
+                conn.close()
+            except:
+                pass
+
+# Instancia global del pool
+db_pool = ConnectionPool()
+
+def get_db_connection():
+    """Obtiene una conexión del pool (usar en lugar de mysql.connector.connect)"""
+    return db_pool.get_connection()
+
+def release_connection(conn):
+    """Libera una conexión de vuelta al pool"""
+    db_pool.return_connection(conn)
+
+# Executor para operaciones en segundo plano
+background_executor = ThreadPoolExecutor(max_workers=4)
+
+# Cache global mejorado con TTL
+class OptimizedCache:
+    """Cache optimizado con tiempo de vida y precarga"""
+    def __init__(self, default_ttl=300):  # 5 minutos por defecto
+        self._cache = {}
+        self._timestamps = {}
+        self._ttl = default_ttl
+        self._lock = threading.Lock()
+
+    def get(self, key, default=None):
+        with self._lock:
+            if key in self._cache:
+                import time
+                if time.time() - self._timestamps.get(key, 0) < self._ttl:
+                    return self._cache[key]
+                else:
+                    del self._cache[key]
+                    del self._timestamps[key]
+            return default
+
+    def set(self, key, value, ttl=None):
+        with self._lock:
+            import time
+            self._cache[key] = value
+            self._timestamps[key] = time.time()
+
+    def clear(self):
+        with self._lock:
+            self._cache.clear()
+            self._timestamps.clear()
+
+    def preload(self, queries_dict):
+        """Precarga múltiples consultas en paralelo"""
+        def load_query(key, query):
+            try:
+                result = pd.read_sql(query, DB_ENGINE)
+                self.set(key, result)
+            except Exception as e:
+                print(f"Error precargando {key}: {e}")
+
+        threads = []
+        for key, query in queries_dict.items():
+            t = threading.Thread(target=load_query, args=(key, query))
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join(timeout=5)  # Máximo 5 segundos por consulta
+
+# Cache global optimizado
+optimized_cache = OptimizedCache(default_ttl=300)
+
+def ejecutar_en_background(func, callback=None, *args, **kwargs):
+    """Ejecuta una función en segundo plano sin bloquear la UI"""
+    def wrapper():
+        try:
+            result = func(*args, **kwargs)
+            if callback:
+                app.after(0, lambda: callback(result))
+        except Exception as e:
+            print(f"Error en background: {e}")
+            if callback:
+                app.after(0, lambda: callback(None))
+
+    background_executor.submit(wrapper)
+
+def consulta_rapida(query, cache_key=None, ttl=300):
+    """Ejecuta consulta con cache automático"""
+    if cache_key:
+        cached = optimized_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+    try:
+        result = pd.read_sql(query, DB_ENGINE)
+        if cache_key:
+            optimized_cache.set(cache_key, result, ttl)
+        return result
+    except Exception as e:
+        print(f"Error en consulta: {e}")
+        return pd.DataFrame()
+
+def precargar_datos_iniciales():
+    """Precarga datos comunes al inicio para acelerar la aplicación"""
+    # Esta función se llama después de que data_cache existe
+    # Las consultas se precargan en background para que estén listas cuando se necesiten
+    try:
+        queries = {
+            'anios_termino_precarga': "SELECT DISTINCT Anio_Termino FROM fiscalizaciones1 WHERE Anio_Termino IS NOT NULL ORDER BY Anio_Termino DESC LIMIT 10",
+            'anios_emis_precarga': "SELECT DISTINCT Anio_Emis FROM fiscalizaciones1 WHERE Anio_Emis IS NOT NULL ORDER BY Anio_Emis DESC LIMIT 10",
+            'kpis_basicos': """
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN LOWER(Estado) = 'terminado' THEN 1 ELSE 0 END) as terminadas,
+                    SUM(CASE WHEN LOWER(Estado) = 'pendiente' THEN 1 ELSE 0 END) as pendientes
+                FROM fiscalizaciones1
+            """
+        }
+        # Ejecutar cada consulta en un thread separado
+        for key, query in queries.items():
+            def load_query(k, q):
+                try:
+                    result = pd.read_sql(q, DB_ENGINE)
+                    # Usar el cache global cuando esté disponible
+                    if 'data_cache' in globals():
+                        data_cache.set(k, result)
+                except Exception as e:
+                    print(f"Precarga {k}: {e}")
+            threading.Thread(target=load_query, args=(key, query), daemon=True).start()
+    except Exception as e:
+        print(f"Error en precarga inicial: {e}")
+
+# Decorador para funciones que cargan datos
+def carga_optimizada(cache_key=None, ttl=300):
+    """Decorador para optimizar funciones de carga de datos"""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            if cache_key:
+                cached = optimized_cache.get(cache_key)
+                if cached is not None:
+                    return cached
+
+            result = func(*args, **kwargs)
+
+            if cache_key and result is not None:
+                optimized_cache.set(cache_key, result, ttl)
+
+            return result
+        return wrapper
+    return decorator
+
+# Función para mostrar loading mientras carga
+def mostrar_loading(parent, mensaje="Cargando..."):
+    """Muestra un indicador de carga"""
+    loading_frame = ctk.CTkFrame(parent, fg_color="transparent")
+    loading_frame.pack(expand=True)
+
+    ctk.CTkLabel(
+        loading_frame,
+        text=f"⏳ {mensaje}",
+        font=("Arial", 14, "bold"),
+        text_color="#002e6d"
+    ).pack()
+
+    return loading_frame
+
+def ocultar_loading(loading_frame):
+    """Oculta el indicador de carga"""
+    try:
+        loading_frame.destroy()
+    except:
+        pass
+
 config = cargar_config()
 
 # ==========================
@@ -7941,33 +8168,56 @@ def exportar_datos_excel(query, nombre_base, filtros_texto):
             messagebox.showerror("Error", f"No se pudo exportar:\n{e}")
 
 # ============================================================================
-# CACHE DE DATOS
+# CACHE DE DATOS (OPTIMIZADO CON THREADING)
 # ============================================================================
 class DataCache:
-    """Cache simple para datos del dashboard"""
+    """Cache optimizado con thread safety y precarga para datos del dashboard"""
     def __init__(self):
         self.cache = {}
         self.timestamps = {}
         self.ttl = 300  # 5 minutos
-    
+        self._lock = threading.Lock()
+
     def get(self, key):
-        """Obtener datos del cache"""
+        """Obtener datos del cache (thread-safe)"""
         import time
-        if key in self.cache:
-            if time.time() - self.timestamps.get(key, 0) < self.ttl:
-                return self.cache[key]
+        with self._lock:
+            if key in self.cache:
+                if time.time() - self.timestamps.get(key, 0) < self.ttl:
+                    return self.cache[key]
+                else:
+                    # Expiró, eliminar
+                    del self.cache[key]
+                    del self.timestamps[key]
         return None
-    
+
     def set(self, key, value):
-        """Guardar datos en cache"""
+        """Guardar datos en cache (thread-safe)"""
         import time
-        self.cache[key] = value
-        self.timestamps[key] = time.time()
-    
+        with self._lock:
+            self.cache[key] = value
+            self.timestamps[key] = time.time()
+
     def clear(self):
         """Limpiar cache"""
-        self.cache.clear()
-        self.timestamps.clear()
+        with self._lock:
+            self.cache.clear()
+            self.timestamps.clear()
+
+    def preload_query(self, key, query):
+        """Precarga una consulta en background"""
+        def _load():
+            try:
+                result = pd.read_sql(query, DB_ENGINE)
+                self.set(key, result)
+            except Exception as e:
+                print(f"Error precargando {key}: {e}")
+        threading.Thread(target=_load, daemon=True).start()
+
+    def preload_multiple(self, queries_dict):
+        """Precarga múltiples consultas en paralelo"""
+        for key, query in queries_dict.items():
+            self.preload_query(key, query)
 
 # Instancia global de cache
 data_cache = DataCache()
@@ -8398,54 +8648,52 @@ def mostrar_dashboard_completo(conexion=None):
 
         # ===== CARGAR DATOS INICIALES =====
         try:
-            # KPIs básicos (cache de 5 minutos)
+            # KPIs básicos (cache de 5 minutos) - UNA SOLA CONSULTA OPTIMIZADA
             kpi_cache_key = "kpis_basicos"
             kpis_data = data_cache.get(kpi_cache_key)
-            
+
             if kpis_data is None:
-                query_total = "SELECT COUNT(*) as total FROM fiscalizaciones1"
-                total_ofs = pd.read_sql(query_total, DB_ENGINE).iloc[0, 0]
-                
-                query_terminadas = "SELECT COUNT(*) as total FROM fiscalizaciones1 WHERE LOWER(Estado) = 'terminado'"
-                ofs_terminadas = pd.read_sql(query_terminadas, DB_ENGINE).iloc[0, 0]
-                
-                query_pendientes = "SELECT COUNT(*) as total FROM fiscalizaciones1 WHERE LOWER(Estado) = 'pendiente'"
-                ofs_pendientes = pd.read_sql(query_pendientes, DB_ENGINE).iloc[0, 0]
-                
+                # Consulta única optimizada que obtiene los 3 valores a la vez
+                query_kpis = """
+                    SELECT
+                        COUNT(*) as total,
+                        SUM(CASE WHEN LOWER(Estado) = 'terminado' THEN 1 ELSE 0 END) as terminadas,
+                        SUM(CASE WHEN LOWER(Estado) = 'pendiente' THEN 1 ELSE 0 END) as pendientes
+                    FROM fiscalizaciones1
+                """
+                df_kpis = pd.read_sql(query_kpis, DB_ENGINE)
                 kpis_data = {
-                    'total': total_ofs,
-                    'terminadas': ofs_terminadas,
-                    'pendientes': ofs_pendientes
+                    'total': int(df_kpis.iloc[0]['total']),
+                    'terminadas': int(df_kpis.iloc[0]['terminadas']),
+                    'pendientes': int(df_kpis.iloc[0]['pendientes'])
                 }
                 data_cache.set(kpi_cache_key, kpis_data)
-            
+
             total_ofs = kpis_data['total']
             ofs_terminadas = kpis_data['terminadas']
             ofs_pendientes = kpis_data['pendientes']
-            
-            # Años disponibles (cache)
+
+            # Años disponibles (cache) - CONSULTA ÚNICA OPTIMIZADA
             anios_cache_key = "anios_disponibles"
             anios_data = data_cache.get(anios_cache_key)
-            
+
             if anios_data is None:
-                df_anios_termino = pd.read_sql(
-                    "SELECT DISTINCT Anio_Termino FROM fiscalizaciones1 WHERE Anio_Termino IS NOT NULL ORDER BY Anio_Termino DESC", 
-                    DB_ENGINE
-                )
-                anios_termino = [str(int(a)) for a in df_anios_termino['Anio_Termino'].tolist()]
-                
-                df_anios_emis = pd.read_sql(
-                    "SELECT DISTINCT Anio_Emis FROM fiscalizaciones1 WHERE Anio_Emis IS NOT NULL ORDER BY Anio_Emis DESC", 
-                    DB_ENGINE
-                )
-                anios_emis = [str(int(a)) for a in df_anios_emis['Anio_Emis'].tolist()]
-                
+                # Una sola consulta que obtiene ambos tipos de años
+                df_anios = pd.read_sql("""
+                    SELECT DISTINCT Anio_Termino, Anio_Emis
+                    FROM fiscalizaciones1
+                    WHERE Anio_Termino IS NOT NULL OR Anio_Emis IS NOT NULL
+                """, DB_ENGINE)
+
+                anios_termino = sorted([str(int(a)) for a in df_anios['Anio_Termino'].dropna().unique()], reverse=True)
+                anios_emis = sorted([str(int(a)) for a in df_anios['Anio_Emis'].dropna().unique()], reverse=True)
+
                 anios_data = {
-                    'termino': anios_termino,
-                    'emision': anios_emis
+                    'termino': anios_termino if anios_termino else ["2025"],
+                    'emision': anios_emis if anios_emis else ["2025"]
                 }
                 data_cache.set(anios_cache_key, anios_data)
-            
+
             anios_termino = anios_data['termino']
             anios_emision = anios_data['emision']
             
@@ -17361,4 +17609,16 @@ if "banner_supervisores_path" in config:
 
 # Inicializar ventana pequeña
 app.geometry("550x375")
+
+# =============================================
+# PRECARGA DE DATOS PARA ACELERAR LA APLICACIÓN
+# =============================================
+def inicializar_app():
+    """Inicializa la aplicación con precarga de datos en segundo plano"""
+    # Precargar datos comunes en threads separados
+    threading.Thread(target=precargar_datos_iniciales, daemon=True).start()
+
+# Ejecutar precarga al iniciar
+app.after(100, inicializar_app)
+
 app.mainloop()
