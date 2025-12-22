@@ -16698,6 +16698,7 @@ def mostrar_dashboard_metas():
         
         # Variables globales de la ventana
         auditores_data = {}  # {nombre_auditor: {'entry': widget, 'var': StringVar}}
+        auditores_excluidos = {}  # {nombre_auditor: {'excluido': bool, 'monto_fijo': float or None}}
         meta_anual_var = tk.StringVar(value="0.00")
         suma_total_var = tk.StringVar(value="0.00")
         modo_edicion = tk.BooleanVar(value=False)
@@ -16764,28 +16765,218 @@ def mostrar_dashboard_metas():
         entry_meta_anual.pack(side="left", padx=(0, 15))
         
         def distribuir_equitativamente():
-            """Divide la meta anual equitativamente entre todos los auditores"""
+            """Divide la meta anual equitativamente entre los auditores no excluidos"""
             try:
                 meta = float(meta_anual_var.get().replace(",", ""))
-                total_auditores = len(auditores_data)
-                
-                if total_auditores == 0:
-                    messagebox.showwarning("Advertencia", "No hay auditores para distribuir")
-                    return
-                
-                monto_por_auditor = meta / total_auditores
-                
+
+                # Calcular cuántos auditores participan y cuánto ya está asignado como monto fijo
+                auditores_participantes = []
+                suma_montos_fijos = 0.0
+
                 for nombre, data in auditores_data.items():
-                    data['var'].set(f"{monto_por_auditor:,.2f}")
-                
+                    exclusion = auditores_excluidos.get(nombre, {})
+
+                    if exclusion.get('excluido', False):
+                        # Está completamente excluido - poner 0
+                        data['var'].set("0.00")
+                    elif exclusion.get('monto_fijo') is not None:
+                        # Tiene monto fijo asignado
+                        monto_fijo = exclusion['monto_fijo']
+                        data['var'].set(f"{monto_fijo:,.2f}")
+                        suma_montos_fijos += monto_fijo
+                    else:
+                        # Participa en la distribución equitativa
+                        auditores_participantes.append(nombre)
+
+                # Calcular monto restante a distribuir
+                monto_restante = meta - suma_montos_fijos
+
+                if monto_restante < 0:
+                    messagebox.showwarning("Advertencia",
+                        f"Los montos fijos (S/ {suma_montos_fijos:,.2f}) superan la meta (S/ {meta:,.2f})")
+                    return
+
+                if len(auditores_participantes) == 0:
+                    if suma_montos_fijos > 0:
+                        messagebox.showinfo("Info", "Todos los auditores tienen montos fijos o están excluidos")
+                    else:
+                        messagebox.showwarning("Advertencia", "No hay auditores para distribuir")
+                    calcular_suma_total()
+                    return
+
+                # Distribuir equitativamente entre los participantes
+                monto_por_auditor = monto_restante / len(auditores_participantes)
+
+                for nombre in auditores_participantes:
+                    auditores_data[nombre]['var'].set(f"{monto_por_auditor:,.2f}")
+
                 calcular_suma_total()
+
             except ValueError:
                 messagebox.showerror("Error", "Ingrese un monto válido")
-        
-        ctk.CTkButton(meta_inner, text="⚖️ Distribuir Equitativamente", 
+
+        def mostrar_popup_exclusiones():
+            """Muestra popup para configurar exclusiones y montos fijos de auditores"""
+            popup = ctk.CTkToplevel(app)
+            popup.title("🚫 Configurar Exclusiones de Auditores")
+            popup.geometry("700x550")
+            popup.transient(app)
+            popup.grab_set()
+
+            # Centrar ventana
+            popup.update_idletasks()
+            x = (popup.winfo_screenwidth() // 2) - (350)
+            y = (popup.winfo_screenheight() // 2) - (275)
+            popup.geometry(f"700x550+{x}+{y}")
+
+            # Frame principal
+            main_popup = ctk.CTkFrame(popup, fg_color="#F5F5F5")
+            main_popup.pack(fill="both", expand=True, padx=15, pady=15)
+
+            # Título
+            ctk.CTkLabel(main_popup,
+                        text="🚫 Configurar Exclusiones de Auditores",
+                        font=("Segoe UI", 16, "bold"),
+                        text_color=COLOR_PRIMARY).pack(pady=(10, 5))
+
+            ctk.CTkLabel(main_popup,
+                        text="Marque para excluir completamente o asigne un monto fijo",
+                        font=("Segoe UI", 11),
+                        text_color="#666666").pack(pady=(0, 15))
+
+            # Frame con scroll para lista de auditores
+            scroll_frame = ctk.CTkScrollableFrame(main_popup, fg_color="white", height=350)
+            scroll_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+            # Encabezados
+            header_frame = ctk.CTkFrame(scroll_frame, fg_color="#E5E7EB", height=40)
+            header_frame.pack(fill="x", pady=(0, 5))
+            header_frame.pack_propagate(False)
+
+            ctk.CTkLabel(header_frame, text="Auditor", font=("Segoe UI", 11, "bold"),
+                        text_color=COLOR_TEXT, width=250).pack(side="left", padx=10)
+            ctk.CTkLabel(header_frame, text="Excluir", font=("Segoe UI", 11, "bold"),
+                        text_color=COLOR_TEXT, width=80).pack(side="left", padx=5)
+            ctk.CTkLabel(header_frame, text="Monto Fijo (S/)", font=("Segoe UI", 11, "bold"),
+                        text_color=COLOR_TEXT, width=150).pack(side="left", padx=5)
+
+            # Diccionario temporal para los controles
+            controles_popup = {}
+
+            for nombre in sorted(auditores_data.keys()):
+                row_frame = ctk.CTkFrame(scroll_frame, fg_color="white", height=45)
+                row_frame.pack(fill="x", pady=2)
+                row_frame.pack_propagate(False)
+
+                # Nombre del auditor
+                ctk.CTkLabel(row_frame, text=nombre[:35] + "..." if len(nombre) > 35 else nombre,
+                            font=("Segoe UI", 10), text_color=COLOR_TEXT,
+                            width=250, anchor="w").pack(side="left", padx=10)
+
+                # Obtener valores actuales
+                exclusion_actual = auditores_excluidos.get(nombre, {})
+
+                # Checkbox excluir
+                var_excluir = tk.BooleanVar(value=exclusion_actual.get('excluido', False))
+                chk_excluir = ctk.CTkCheckBox(row_frame, text="", variable=var_excluir,
+                                            width=80, checkbox_width=20, checkbox_height=20,
+                                            fg_color=COLOR_DANGER, hover_color="#B91C1C")
+                chk_excluir.pack(side="left", padx=5)
+
+                # Entry monto fijo
+                monto_actual = exclusion_actual.get('monto_fijo')
+                var_monto = tk.StringVar(value=f"{monto_actual:,.2f}" if monto_actual else "")
+                entry_monto = ctk.CTkEntry(row_frame, textvariable=var_monto,
+                                          width=150, height=30, font=("Segoe UI", 10),
+                                          placeholder_text="Vacío = equitativo")
+                entry_monto.pack(side="left", padx=5)
+
+                # Función para deshabilitar monto si está excluido
+                def toggle_entry(var_e, entry_m, nombre_aud):
+                    def _toggle():
+                        if var_e.get():
+                            entry_m.configure(state="disabled")
+                            entry_m.delete(0, tk.END)
+                        else:
+                            entry_m.configure(state="normal")
+                    return _toggle
+
+                var_excluir.trace_add("write", lambda *args, v=var_excluir, e=entry_monto, n=nombre: toggle_entry(v, e, n)())
+
+                # Aplicar estado inicial
+                if var_excluir.get():
+                    entry_monto.configure(state="disabled")
+
+                controles_popup[nombre] = {
+                    'var_excluir': var_excluir,
+                    'var_monto': var_monto
+                }
+
+            # Frame de botones
+            btn_frame = ctk.CTkFrame(main_popup, fg_color="transparent")
+            btn_frame.pack(fill="x", pady=15)
+
+            def aplicar_exclusiones():
+                """Guarda las configuraciones de exclusión"""
+                auditores_excluidos.clear()
+
+                for nombre, controles in controles_popup.items():
+                    excluido = controles['var_excluir'].get()
+                    monto_str = controles['var_monto'].get().replace(",", "").strip()
+
+                    monto_fijo = None
+                    if monto_str and not excluido:
+                        try:
+                            monto_fijo = float(monto_str)
+                        except ValueError:
+                            pass
+
+                    if excluido or monto_fijo is not None:
+                        auditores_excluidos[nombre] = {
+                            'excluido': excluido,
+                            'monto_fijo': monto_fijo if not excluido else None
+                        }
+
+                # Mostrar resumen
+                excluidos_count = sum(1 for v in auditores_excluidos.values() if v.get('excluido'))
+                fijos_count = sum(1 for v in auditores_excluidos.values() if v.get('monto_fijo') is not None)
+
+                popup.destroy()
+
+                msg = f"✅ Configuración guardada:\n\n"
+                msg += f"• Auditores excluidos: {excluidos_count}\n"
+                msg += f"• Auditores con monto fijo: {fijos_count}\n"
+                msg += f"• Auditores para distribución equitativa: {len(auditores_data) - excluidos_count - fijos_count}"
+
+                messagebox.showinfo("Exclusiones Configuradas", msg)
+
+            def limpiar_exclusiones():
+                """Limpia todas las exclusiones"""
+                for controles in controles_popup.values():
+                    controles['var_excluir'].set(False)
+                    controles['var_monto'].set("")
+
+            ctk.CTkButton(btn_frame, text="🗑️ Limpiar Todo", command=limpiar_exclusiones,
+                        fg_color="#6B7280", hover_color="#4B5563",
+                        font=("Segoe UI", 11, "bold"), width=140, height=35).pack(side="left", padx=10)
+
+            ctk.CTkButton(btn_frame, text="❌ Cancelar", command=popup.destroy,
+                        fg_color=COLOR_DANGER, hover_color="#B91C1C",
+                        font=("Segoe UI", 11, "bold"), width=120, height=35).pack(side="right", padx=10)
+
+            ctk.CTkButton(btn_frame, text="✅ Aplicar", command=aplicar_exclusiones,
+                        fg_color="#059669", hover_color="#047857",
+                        font=("Segoe UI", 11, "bold"), width=120, height=35).pack(side="right", padx=5)
+
+        ctk.CTkButton(meta_inner, text="⚖️ Distribuir Equitativamente",
                     command=distribuir_equitativamente,
                     fg_color=COLOR_SECONDARY, hover_color=COLOR_PRIMARY,
-                    font=("Segoe UI", 11, "bold"), width=200, height=35).pack(side="left")
+                    font=("Segoe UI", 11, "bold"), width=200, height=35).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(meta_inner, text="🚫 Excluir",
+                    command=mostrar_popup_exclusiones,
+                    fg_color="#DC2626", hover_color="#B91C1C",
+                    font=("Segoe UI", 11, "bold"), width=120, height=35).pack(side="left")
         
         # ====================
         # SECCIÓN RESUMEN
