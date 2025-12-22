@@ -16992,7 +16992,16 @@ def mostrar_dashboard_metas():
                 # Actualizar indicadores visuales en la tabla
                 actualizar_indicadores_visuales()
 
-                # ACTUALIZAR LOS VALORES EN LA TABLA según las exclusiones
+                # CALCULAR Y DISTRIBUIR EL MONTO RESTANTE
+                try:
+                    meta_total = float(meta_anual_var.get().replace(",", ""))
+                except ValueError:
+                    meta_total = 0.0
+
+                suma_montos_fijos = 0.0
+                auditores_participantes = []
+
+                # Primera pasada: aplicar exclusiones y montos fijos, identificar participantes
                 for nombre_aud, data in auditores_data.items():
                     exclusion = auditores_excluidos.get(nombre_aud, {})
                     if exclusion.get('excluido', False):
@@ -17004,14 +17013,31 @@ def mostrar_dashboard_metas():
                         monto_fijo = exclusion['monto_fijo']
                         data['var'].set(f"{monto_fijo:,.2f}")
                         data['entry'].configure(state="disabled")
+                        suma_montos_fijos += monto_fijo
                     else:
-                        # Auditor normal - habilitar entry
+                        # Auditor normal - participará en distribución equitativa
                         data['entry'].configure(state="normal")
+                        auditores_participantes.append(nombre_aud)
+
+                # Segunda pasada: distribuir el monto restante entre participantes
+                monto_restante = meta_total - suma_montos_fijos
+                monto_distribuido = 0.0
+
+                if len(auditores_participantes) > 0 and monto_restante > 0:
+                    monto_por_auditor = monto_restante / len(auditores_participantes)
+                    for nombre_aud in auditores_participantes:
+                        auditores_data[nombre_aud]['var'].set(f"{monto_por_auditor:,.2f}")
+                    monto_distribuido = monto_por_auditor
+
+                # Actualizar suma total
+                calcular_suma_total()
 
                 msg = f"✅ Configuración guardada:\n\n"
                 msg += f"• Auditores excluidos: {excluidos_count}\n"
-                msg += f"• Auditores con monto fijo: {fijos_count}\n"
-                msg += f"• Auditores para distribución equitativa: {len(auditores_data) - excluidos_count - fijos_count}"
+                msg += f"• Auditores con monto fijo: {fijos_count} (S/ {suma_montos_fijos:,.2f})\n"
+                msg += f"• Auditores para distribución: {len(auditores_participantes)}\n"
+                if monto_distribuido > 0:
+                    msg += f"• Monto por auditor: S/ {monto_distribuido:,.2f}"
 
                 messagebox.showinfo("Exclusiones Configuradas", msg)
 
