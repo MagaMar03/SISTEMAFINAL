@@ -16992,6 +16992,22 @@ def mostrar_dashboard_metas():
                 # Actualizar indicadores visuales en la tabla
                 actualizar_indicadores_visuales()
 
+                # ACTUALIZAR LOS VALORES EN LA TABLA según las exclusiones
+                for nombre_aud, data in auditores_data.items():
+                    exclusion = auditores_excluidos.get(nombre_aud, {})
+                    if exclusion.get('excluido', False):
+                        # Auditor excluido = 0.00
+                        data['var'].set("0.00")
+                        data['entry'].configure(state="disabled")
+                    elif exclusion.get('monto_fijo') is not None:
+                        # Auditor con monto fijo = el monto configurado
+                        monto_fijo = exclusion['monto_fijo']
+                        data['var'].set(f"{monto_fijo:,.2f}")
+                        data['entry'].configure(state="disabled")
+                    else:
+                        # Auditor normal - habilitar entry
+                        data['entry'].configure(state="normal")
+
                 msg = f"✅ Configuración guardada:\n\n"
                 msg += f"• Auditores excluidos: {excluidos_count}\n"
                 msg += f"• Auditores con monto fijo: {fijos_count}\n"
