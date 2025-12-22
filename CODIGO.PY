@@ -16234,14 +16234,27 @@ def mostrar_dashboard_metas():
     # ====================
     # TAB 1: OF - RECAUDACIÓN AUDITORIA
     # ====================
-    
-    # Cargar datos iniciales OF
+
+    # Mostrar indicador de carga mientras se cargan los datos
+    loading_of = ctk.CTkLabel(tab_of, text="⏳ Cargando datos OF...",
+                              font=("Segoe UI", 14, "bold"), text_color=COLOR_PRIMARY)
+    loading_of.pack(expand=True, pady=50)
+    tab_of.update()
+
+    # Cargar datos iniciales OF con cache
     try:
-        query_of = "SELECT MTO_PAG, MES, des_func, reimputado, des_ai, corriente FROM fiscalizaciones2"
-        df_of_completo = pd.read_sql(query_of, DB_ENGINE)
+        cache_key_of = "metas_of_datos"
+        df_of_completo = data_cache.get(cache_key_of)
+        if df_of_completo is None:
+            query_of = "SELECT MTO_PAG, MES, des_func, reimputado, des_ai, corriente FROM fiscalizaciones2"
+            df_of_completo = pd.read_sql(query_of, DB_ENGINE)
+            data_cache.set(cache_key_of, df_of_completo)
     except Exception as e:
+        loading_of.destroy()
         messagebox.showerror("Error", f"No se pudieron cargar datos de OF:\n{e}")
         return
+
+    loading_of.destroy()
 
     # Frame de filtros OF
     filtro_of_frame = ctk.CTkFrame(tab_of, fg_color=COLOR_BOX, corner_radius=10)
@@ -16250,7 +16263,7 @@ def mostrar_dashboard_metas():
     ctk.CTkLabel(filtro_of_frame, text="Filtros:", font=("Segoe UI", 13, "bold"),
                  text_color=COLOR_TEXT).pack(side="left", padx=(10, 15), pady=10)
 
-    # Obtener valores únicos para filtros OF
+    # Obtener valores únicos para filtros OF (optimizado con listas más pequeñas)
     valores_reimputado_of = sorted(df_of_completo['reimputado'].dropna().unique().tolist())
     valores_des_ai_of = sorted(df_of_completo['des_ai'].dropna().unique().tolist())
     valores_corriente_of = sorted(df_of_completo['corriente'].dropna().unique().tolist())
@@ -16764,6 +16777,37 @@ def mostrar_dashboard_metas():
                                         border_color=COLOR_PRIMARY, border_width=2)
         entry_meta_anual.pack(side="left", padx=(0, 15))
         
+        def actualizar_indicadores_visuales():
+            """Actualiza los indicadores visuales de estado en la tabla de auditores"""
+            for nombre, data in auditores_data.items():
+                exclusion = auditores_excluidos.get(nombre, {})
+                estado_label = data.get('estado_label')
+                frame = data.get('frame')
+                nombre_label = data.get('nombre_label')
+
+                if estado_label:
+                    if exclusion.get('excluido', False):
+                        # Auditor excluido - mostrar en rojo
+                        estado_label.configure(text="🚫 EXCLUIDO", text_color="#DC2626")
+                        if frame:
+                            frame.configure(fg_color="#FEE2E2")  # Fondo rojo claro
+                        if nombre_label:
+                            nombre_label.configure(text_color="#991B1B")
+                    elif exclusion.get('monto_fijo') is not None:
+                        # Auditor con monto fijo - mostrar en naranja
+                        estado_label.configure(text="📌 FIJO", text_color="#D97706")
+                        if frame:
+                            frame.configure(fg_color="#FEF3C7")  # Fondo amarillo claro
+                        if nombre_label:
+                            nombre_label.configure(text_color="#92400E")
+                    else:
+                        # Auditor normal
+                        estado_label.configure(text="", text_color=COLOR_TEXT)
+                        if frame:
+                            frame.configure(fg_color=COLOR_BOX)
+                        if nombre_label:
+                            nombre_label.configure(text_color=COLOR_TEXT)
+
         def distribuir_equitativamente():
             """Divide la meta anual equitativamente entre los auditores no excluidos"""
             try:
@@ -16802,6 +16846,7 @@ def mostrar_dashboard_metas():
                     else:
                         messagebox.showwarning("Advertencia", "No hay auditores para distribuir")
                     calcular_suma_total()
+                    actualizar_indicadores_visuales()
                     return
 
                 # Distribuir equitativamente entre los participantes
@@ -16811,6 +16856,7 @@ def mostrar_dashboard_metas():
                     auditores_data[nombre]['var'].set(f"{monto_por_auditor:,.2f}")
 
                 calcular_suma_total()
+                actualizar_indicadores_visuales()
 
             except ValueError:
                 messagebox.showerror("Error", "Ingrese un monto válido")
@@ -16943,6 +16989,9 @@ def mostrar_dashboard_metas():
 
                 popup.destroy()
 
+                # Actualizar indicadores visuales en la tabla
+                actualizar_indicadores_visuales()
+
                 msg = f"✅ Configuración guardada:\n\n"
                 msg += f"• Auditores excluidos: {excluidos_count}\n"
                 msg += f"• Auditores con monto fijo: {fijos_count}\n"
@@ -17061,26 +17110,38 @@ def mostrar_dashboard_metas():
         scrollbar_auditores.pack(side="right", fill="y", padx=(0, 15), pady=(0, 15))
         
         # ====================
-        # CARGAR AUDITORES Y DATOS
+        # CARGAR AUDITORES Y DATOS (OPTIMIZADO)
         # ====================
         def cargar_auditores():
             """Carga auditores únicos de fiscalizaciones2 y verifica si hay datos guardados"""
             try:
-                # Obtener auditores únicos de fiscalizaciones2
-                query_auditores = """
-                    SELECT DISTINCT des_func 
-                    FROM fiscalizaciones2 
-                    WHERE des_func IS NOT NULL AND des_func != ''
-                    ORDER BY des_func
-                """
-                df_auditores = pd.read_sql(query_auditores, DB_ENGINE)
-                
+                # Mostrar indicador de carga
+                loading_label = ctk.CTkLabel(frame_auditores, text="⏳ Cargando auditores...",
+                                           font=("Segoe UI", 12, "bold"), text_color=COLOR_PRIMARY)
+                loading_label.pack(pady=20)
+                frame_auditores.update()
+
+                # Obtener auditores únicos con cache
+                cache_key_auditores = "metas_auditores_of"
+                df_auditores = data_cache.get(cache_key_auditores)
+                if df_auditores is None:
+                    query_auditores = """
+                        SELECT DISTINCT des_func
+                        FROM fiscalizaciones2
+                        WHERE des_func IS NOT NULL AND des_func != ''
+                        ORDER BY des_func
+                    """
+                    df_auditores = pd.read_sql(query_auditores, DB_ENGINE)
+                    data_cache.set(cache_key_auditores, df_auditores)
+
+                loading_label.destroy()
+
                 if df_auditores.empty:
                     messagebox.showwarning("Advertencia", "No se encontraron auditores en la base de datos")
                     volver_dashboard()
                     return
-                
-                # Verificar si ya existen datos guardados para este año
+
+                # Verificar si ya existen datos guardados para este año (sin cache - siempre fresco)
                 query_guardados = """
                     SELECT nombre_auditor, monto_asignado, monto_anual, fecha
                     FROM distribucion
@@ -17106,46 +17167,55 @@ def mostrar_dashboard_metas():
                 # Crear campos para cada auditor
                 for idx, row in df_auditores.iterrows():
                     nombre_auditor = row['des_func']
-                    
+
                     # Frame para cada auditor
                     auditor_frame = ctk.CTkFrame(frame_auditores, fg_color=COLOR_BOX, corner_radius=8)
                     auditor_frame.pack(fill="x", padx=5, pady=3)
-                    
+
                     inner_frame = ctk.CTkFrame(auditor_frame, fg_color="transparent")
                     inner_frame.pack(fill="x", padx=10, pady=8)
-                    
+
+                    # Label de estado (excluido/monto fijo) - inicialmente vacío
+                    estado_label = ctk.CTkLabel(inner_frame, text="",
+                                              font=("Segoe UI", 9, "bold"), width=80)
+                    estado_label.pack(side="left", padx=(0, 5))
+
                     # Nombre del auditor
-                    ctk.CTkLabel(inner_frame, text=f"👤 {nombre_auditor}", 
-                                font=("Segoe UI", 11), text_color=COLOR_TEXT, 
-                                width=300, anchor="w").pack(side="left", padx=(0, 10))
-                    
+                    nombre_label = ctk.CTkLabel(inner_frame, text=f"👤 {nombre_auditor}",
+                                font=("Segoe UI", 11), text_color=COLOR_TEXT,
+                                width=280, anchor="w")
+                    nombre_label.pack(side="left", padx=(0, 10))
+
                     # Entry para monto
                     monto_var = tk.StringVar(value="0.00")
-                    
+
                     # Si hay datos guardados, cargar el monto
                     if nombre_auditor in montos_guardados:
                         monto_var.set(f"{montos_guardados[nombre_auditor]:,.2f}")
-                    
+
                     def on_monto_change(*args, var=monto_var):
                         calcular_suma_total()
-                    
+
                     monto_var.trace_add("write", on_monto_change)
-                    
+
                     entry_monto = ctk.CTkEntry(inner_frame, textvariable=monto_var,
                                             font=("Segoe UI", 11), width=180, height=32,
                                             border_color="#D1D5DB", border_width=1,
                                             placeholder_text="0.00")
                     entry_monto.pack(side="left", padx=(0, 5))
-                    
-                    ctk.CTkLabel(inner_frame, text="S/", 
+
+                    ctk.CTkLabel(inner_frame, text="S/",
                                 font=("Segoe UI", 11, "bold"), text_color=COLOR_SECONDARY).pack(side="left")
-                    
-                    # Guardar referencia
+
+                    # Guardar referencia con label de estado
                     auditores_data[nombre_auditor] = {
                         'entry': entry_monto,
-                        'var': monto_var
+                        'var': monto_var,
+                        'frame': auditor_frame,
+                        'estado_label': estado_label,
+                        'nombre_label': nombre_label
                     }
-                
+
                 # Calcular suma inicial
                 calcular_suma_total()
                 
@@ -17295,14 +17365,27 @@ def mostrar_dashboard_metas():
     # ====================
     # TAB 2: AI - RECAUDACIÓN AUDITORIA
     # ====================
-    
-    # Cargar datos iniciales AI
+
+    # Mostrar indicador de carga mientras se cargan los datos
+    loading_ai = ctk.CTkLabel(tab_ai, text="⏳ Cargando datos AI...",
+                              font=("Segoe UI", 14, "bold"), text_color=COLOR_PRIMARY)
+    loading_ai.pack(expand=True, pady=50)
+    tab_ai.update()
+
+    # Cargar datos iniciales AI con cache
     try:
-        query_ai = "SELECT MTO_PAG_IN, MES, nomb_ver, reimputado, corriente FROM fiscalizaciones5"
-        df_ai_completo = pd.read_sql(query_ai, DB_ENGINE)
+        cache_key_ai = "metas_ai_datos"
+        df_ai_completo = data_cache.get(cache_key_ai)
+        if df_ai_completo is None:
+            query_ai = "SELECT MTO_PAG_IN, MES, nomb_ver, reimputado, corriente FROM fiscalizaciones5"
+            df_ai_completo = pd.read_sql(query_ai, DB_ENGINE)
+            data_cache.set(cache_key_ai, df_ai_completo)
     except Exception as e:
+        loading_ai.destroy()
         messagebox.showerror("Error", f"No se pudieron cargar datos de AI:\n{e}")
         return
+
+    loading_ai.destroy()
 
     # Frame de filtros AI
     filtro_ai_frame = ctk.CTkFrame(tab_ai, fg_color=COLOR_BOX, corner_radius=10)
@@ -17311,7 +17394,7 @@ def mostrar_dashboard_metas():
     ctk.CTkLabel(filtro_ai_frame, text="Filtros:", font=("Segoe UI", 13, "bold"),
                  text_color=COLOR_TEXT).pack(side="left", padx=(10, 15), pady=10)
 
-    # Obtener valores únicos para filtros AI
+    # Obtener valores únicos para filtros AI (optimizado)
     valores_reimputado_ai = sorted(df_ai_completo['reimputado'].dropna().unique().tolist())
     valores_corriente_ai = sorted(df_ai_completo['corriente'].dropna().unique().tolist())
     valores_nomb_ver_ai = sorted(df_ai_completo['nomb_ver'].dropna().unique().tolist())
