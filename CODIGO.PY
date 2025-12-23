@@ -13204,30 +13204,30 @@ def dashboard_control_detracciones():
         # Crear ventana de contraseña
         dialog = ctk.CTkToplevel(app)
         dialog.title("🔐 Acceso Restringido")
-        dialog.geometry("350x200")
+        dialog.geometry("420x280")
         dialog.transient(app)
         dialog.grab_set()
         dialog.resizable(False, False)
 
         # Centrar
         dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - 175
-        y = (dialog.winfo_screenheight() // 2) - 100
-        dialog.geometry(f"350x200+{x}+{y}")
+        x = (dialog.winfo_screenwidth() // 2) - 210
+        y = (dialog.winfo_screenheight() // 2) - 140
+        dialog.geometry(f"420x280+{x}+{y}")
 
         frame_dialog = ctk.CTkFrame(dialog, fg_color="#F5F5F5")
-        frame_dialog.pack(fill="both", expand=True, padx=15, pady=15)
+        frame_dialog.pack(fill="both", expand=True, padx=20, pady=20)
 
         ctk.CTkLabel(frame_dialog, text="🔐 Control de Saldo",
-                    font=("Segoe UI", 16, "bold"), text_color="#1E40AF").pack(pady=(10, 5))
+                    font=("Segoe UI", 20, "bold"), text_color="#1E40AF").pack(pady=(15, 8))
         ctk.CTkLabel(frame_dialog, text="Ingrese la contraseña para acceder:",
-                    font=("Segoe UI", 11), text_color="#666666").pack(pady=(0, 10))
+                    font=("Segoe UI", 13), text_color="#666666").pack(pady=(0, 15))
 
         password_var = tk.StringVar()
         entry_password = ctk.CTkEntry(frame_dialog, textvariable=password_var,
-                                     show="*", width=200, height=35,
-                                     font=("Segoe UI", 12))
-        entry_password.pack(pady=5)
+                                     show="*", width=280, height=45,
+                                     font=("Segoe UI", 14))
+        entry_password.pack(pady=10)
         entry_password.focus()
 
         def verificar_password():
@@ -13243,14 +13243,16 @@ def dashboard_control_detracciones():
         entry_password.bind("<Return>", lambda e: verificar_password())
 
         btn_frame = ctk.CTkFrame(frame_dialog, fg_color="transparent")
-        btn_frame.pack(pady=15)
+        btn_frame.pack(pady=20)
 
         ctk.CTkButton(btn_frame, text="❌ Cancelar", command=dialog.destroy,
                      fg_color="#6B7280", hover_color="#4B5563",
-                     width=100, height=32).pack(side="left", padx=5)
+                     font=("Segoe UI", 13, "bold"),
+                     width=130, height=42).pack(side="left", padx=10)
         ctk.CTkButton(btn_frame, text="✅ Acceder", command=verificar_password,
                      fg_color="#059669", hover_color="#047857",
-                     width=100, height=32).pack(side="left", padx=5)
+                     font=("Segoe UI", 13, "bold"),
+                     width=130, height=42).pack(side="left", padx=10)
 
     btn_tab_control = ctk.CTkButton(
         tabs_frame,
