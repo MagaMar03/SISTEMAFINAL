@@ -13991,20 +13991,26 @@ def dashboard_control_detracciones():
         frame_tabla_control.update()
 
         try:
-            # Query para cruzar fiscalizaciones1 con fiscalizaciones4
-            # Obtiene todos los registros de fiscalizaciones4 y cruza con fiscalizaciones1 usando NUM_DOCSEL = num_ruc
+            # Query para cruzar fiscalizaciones4 con fiscalizaciones1
+            # Muestra todos los RUC de fiscalizaciones4 con saldo > 0 y sus datos vinculados de fiscalizaciones1
             query_cruce = """
                 SELECT
-                    f4.num_ruc,
-                    f4.mto_saldo,
-                    f1.NUM_ORD_FI,
-                    f1.DDP_NOMBRE as razon_social,
-                    f1.Estado as estado_of,
-                    f1.Anio_Emis,
-                    f1.des_cod
+                    f4.num_ruc as RUC,
+                    f1.DDP_NOMBRE as RAZON_SOCIAL,
+                    f4.mto_saldo as SALDO,
+                    f1.NUM_ORD_FI as NUM_ORDEN,
+                    f1.des_cod as DESCRIPCION,
+                    f1.Estado as ESTADO,
+                    f1.Anio_Emis as ANIO,
+                    CASE
+                        WHEN m.ruc IS NOT NULL THEN 'SI'
+                        ELSE 'NO'
+                    END as PADRON_MYPE
                 FROM fiscalizaciones4 f4
                 LEFT JOIN fiscalizaciones1 f1
                     ON TRIM(f4.num_ruc) = TRIM(f1.NUM_DOCSEL)
+                LEFT JOIN mypes m
+                    ON TRIM(f4.num_ruc) = TRIM(m.ruc)
                 WHERE f4.mto_saldo > 0
                 ORDER BY f4.mto_saldo DESC;
             """
@@ -14019,9 +14025,9 @@ def dashboard_control_detracciones():
 
             # Calcular métricas
             total_registros = len(df_cruce)
-            total_saldo = df_cruce['mto_saldo'].sum()
-            total_contribuyentes = df_cruce['num_ruc'].nunique()
-            total_of_vinculados = df_cruce['NUM_ORD_FI'].notna().sum()
+            total_saldo = df_cruce['SALDO'].sum()
+            total_contribuyentes = df_cruce['RUC'].nunique()
+            total_of_vinculados = df_cruce['NUM_ORDEN'].notna().sum()
 
             # Crear cards de métricas
             crear_card(metrics_control_container, "📋", "Total Registros", total_registros, "#c2e9fb", "#90cdf4")
@@ -14031,81 +14037,76 @@ def dashboard_control_detracciones():
 
             # Título de la tabla
             ctk.CTkLabel(frame_tabla_control,
-                        text="📊 CRUCE DE DATOS: FISCALIZACIONES - SALDO DETRACCIONES",
-                        font=("Segoe UI", 14, "bold"), text_color="#1E40AF").pack(pady=(10, 5))
+                        text="📊 CRUCE DE DATOS: SALDO DETRACCIONES - FISCALIZACIONES",
+                        font=("Segoe UI", 14, "bold"), text_color="#1E40AF").pack(anchor="w", padx=12, pady=(10, 5))
 
-            # Canvas con scroll para la tabla
-            canvas_control = tk.Canvas(frame_tabla_control, bg="white", highlightthickness=0, height=400)
-            scrollbar_y = ctk.CTkScrollbar(frame_tabla_control, orientation="vertical", command=canvas_control.yview)
-            scrollbar_x = ttk.Scrollbar(frame_tabla_control, orient="horizontal", command=canvas_control.xview)
-            canvas_control.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+            # Contenedor para la tabla con scroll
+            container = ctk.CTkFrame(frame_tabla_control, fg_color="white")
+            container.pack(fill="both", expand=True, padx=5, pady=5)
 
-            frame_tabla_inner = ctk.CTkFrame(canvas_control, fg_color="white")
-            canvas_window_ctrl = canvas_control.create_window((0, 0), window=frame_tabla_inner, anchor="nw")
+            # Columnas de la tabla
+            cols = ["RUC", "RAZON_SOCIAL", "SALDO", "NUM_ORDEN", "DESCRIPCION", "ESTADO", "ANIO", "PADRON_MYPE"]
+            tree = ttk.Treeview(container, columns=cols, show="headings")
 
-            def on_configure_ctrl(event=None):
-                canvas_control.configure(scrollregion=canvas_control.bbox("all"))
+            # Scrollbars
+            vsb = ttk.Scrollbar(container, orient="vertical", command=tree.yview)
+            hsb = ttk.Scrollbar(container, orient="horizontal", command=tree.xview)
+            tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
 
-            frame_tabla_inner.bind("<Configure>", on_configure_ctrl)
+            tree.grid(row=0, column=0, sticky="nsew")
+            vsb.grid(row=0, column=1, sticky="ns")
+            hsb.grid(row=1, column=0, sticky="ew")
 
-            scrollbar_y.pack(side="right", fill="y")
-            scrollbar_x.pack(side="bottom", fill="x")
-            canvas_control.pack(side="left", fill="both", expand=True, padx=5, pady=5)
+            container.grid_rowconfigure(0, weight=1)
+            container.grid_columnconfigure(0, weight=1)
 
-            # Encabezados de tabla
-            headers = ["RUC", "Razón Social", "Saldo", "N° Orden", "Descripción", "Estado", "Año"]
-            widths = [120, 250, 120, 120, 180, 100, 80]
+            # Configurar encabezados y anchos
+            headers_config = {
+                "RUC": ("RUC", 110),
+                "RAZON_SOCIAL": ("Razón Social", 250),
+                "SALDO": ("Saldo Detracc.", 120),
+                "NUM_ORDEN": ("N° Orden FI", 120),
+                "DESCRIPCION": ("Descripción", 150),
+                "ESTADO": ("Estado", 100),
+                "ANIO": ("Año", 70),
+                "PADRON_MYPE": ("MYPE", 60)
+            }
 
-            header_frame = ctk.CTkFrame(frame_tabla_inner, fg_color="#1E40AF", height=40)
-            header_frame.pack(fill="x")
-            header_frame.pack_propagate(False)
+            for col in cols:
+                header_text, width = headers_config.get(col, (col, 100))
+                tree.heading(col, text=header_text)
+                tree.column(col, width=width, minwidth=50)
 
-            for i, (header, width) in enumerate(zip(headers, widths)):
-                ctk.CTkLabel(header_frame, text=header, font=("Segoe UI", 11, "bold"),
-                            text_color="white", width=width).pack(side="left", padx=2)
+            # Estilos para el Treeview
+            style = ttk.Style()
+            style.configure("Treeview", font=("Segoe UI", 10), rowheight=28)
+            style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"))
 
-            # Filas de datos
-            for idx, row in df_cruce.head(500).iterrows():  # Limitar a 500 filas
-                bg_color = "#F8FAFC" if idx % 2 == 0 else "#FFFFFF"
+            # Tags para colores
+            tree.tag_configure("vinculado", background="#ECFDF5")  # Verde claro para vinculados
+            tree.tag_configure("no_vinculado", background="#FEF3C7")  # Amarillo para no vinculados
+            tree.tag_configure("mype_si", background="#DBEAFE")  # Azul claro para MYPE
 
-                # Resaltar filas con OF vinculado
-                if pd.notna(row['NUM_ORD_FI']):
-                    bg_color = "#ECFDF5"  # Verde claro para vinculados
+            # Insertar datos
+            for idx, row in df_cruce.iterrows():
+                valores = []
+                for col in cols:
+                    val = row[col]
+                    if col == "SALDO":
+                        val = f"S/ {float(val):,.2f}" if pd.notna(val) else "S/ 0.00"
+                    elif pd.isna(val):
+                        val = "-"
+                    valores.append(val)
 
-                row_frame = ctk.CTkFrame(frame_tabla_inner, fg_color=bg_color, height=35)
-                row_frame.pack(fill="x")
-                row_frame.pack_propagate(False)
+                # Determinar tag según vinculación
+                if pd.notna(row['NUM_ORDEN']):
+                    tag = "vinculado"
+                else:
+                    tag = "no_vinculado"
 
-                # RUC
-                ctk.CTkLabel(row_frame, text=str(row['num_ruc'] or ""),
-                            font=("Segoe UI", 10), text_color="#333", width=120).pack(side="left", padx=2)
-                # Razón Social
-                razon = str(row['razon_social'] or "")[:35]
-                ctk.CTkLabel(row_frame, text=razon,
-                            font=("Segoe UI", 10), text_color="#333", width=250, anchor="w").pack(side="left", padx=2)
-                # Saldo
-                saldo = float(row['mto_saldo']) if pd.notna(row['mto_saldo']) else 0
-                ctk.CTkLabel(row_frame, text=f"S/ {saldo:,.2f}",
-                            font=("Segoe UI", 10, "bold"), text_color="#059669", width=120).pack(side="left", padx=2)
-                # N° Orden
-                num_ord = str(row['NUM_ORD_FI']) if pd.notna(row['NUM_ORD_FI']) else "-"
-                ctk.CTkLabel(row_frame, text=num_ord,
-                            font=("Segoe UI", 10), text_color="#333", width=120).pack(side="left", padx=2)
-                # Descripción (des_cod)
-                descripcion = str(row['des_cod'] or "-")[:25]
-                ctk.CTkLabel(row_frame, text=descripcion,
-                            font=("Segoe UI", 10), text_color="#333", width=180, anchor="w").pack(side="left", padx=2)
-                # Estado
-                estado = str(row['estado_of'] or "-")
-                color_estado = "#059669" if estado.lower() == "terminado" else "#F59E0B" if estado.lower() == "pendiente" else "#666"
-                ctk.CTkLabel(row_frame, text=estado,
-                            font=("Segoe UI", 10), text_color=color_estado, width=100).pack(side="left", padx=2)
-                # Año
-                anio = str(row['Anio_Emis'] or "-")
-                ctk.CTkLabel(row_frame, text=anio,
-                            font=("Segoe UI", 10), text_color="#333", width=80).pack(side="left", padx=2)
+                tree.insert("", "end", values=valores, tags=(tag,))
 
-            # Botón exportar
+            # Función para exportar
             def exportar_control_saldo():
                 from tkinter import filedialog
                 filename = filedialog.asksaveasfilename(
@@ -14114,15 +14115,34 @@ def dashboard_control_detracciones():
                     title="Guardar cruce de datos"
                 )
                 if filename:
-                    df_cruce.to_excel(filename, index=False)
+                    # Crear DataFrame para exportar con formato
+                    df_export = df_cruce.copy()
+                    df_export['SALDO'] = df_export['SALDO'].apply(lambda x: f"S/ {x:,.2f}" if pd.notna(x) else "S/ 0.00")
+                    df_export.to_excel(filename, index=False)
                     messagebox.showinfo("Éxito", f"Datos exportados a:\n{filename}")
 
-            ctk.CTkButton(frame_tabla_control, text="📥 Exportar a Excel", command=exportar_control_saldo,
+            # Frame para botones
+            btn_frame = ctk.CTkFrame(frame_tabla_control, fg_color="transparent")
+            btn_frame.pack(fill="x", pady=10, padx=10)
+
+            ctk.CTkButton(btn_frame, text="📥 Exportar a Excel", command=exportar_control_saldo,
                         fg_color="#10B981", hover_color="#059669",
-                        font=("Segoe UI", 11, "bold"), width=160, height=35).pack(pady=10)
+                        font=("Segoe UI", 11, "bold"), width=160, height=35).pack(side="left", padx=5)
+
+            # Leyenda de colores
+            leyenda_frame = ctk.CTkFrame(btn_frame, fg_color="transparent")
+            leyenda_frame.pack(side="right", padx=10)
+
+            ctk.CTkLabel(leyenda_frame, text="🟢 Con OF vinculado", font=("Segoe UI", 9),
+                        text_color="#059669").pack(side="left", padx=10)
+            ctk.CTkLabel(leyenda_frame, text="🟡 Sin OF vinculado", font=("Segoe UI", 9),
+                        text_color="#D97706").pack(side="left", padx=10)
 
         except Exception as e:
-            loading_label.destroy()
+            try:
+                loading_label.destroy()
+            except:
+                pass
             ctk.CTkLabel(frame_tabla_control, text=f"Error al cargar datos:\n{str(e)}",
                         font=("Segoe UI", 12), text_color="#DC2626").pack(pady=30)
 
