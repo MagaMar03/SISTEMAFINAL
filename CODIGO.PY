@@ -13999,7 +13999,6 @@ def dashboard_control_detracciones():
                     f4.mto_saldo,
                     f1.NUM_ORD_FI,
                     f1.DDP_NOMBRE as razon_social,
-                    f1.des_func,
                     f1.Estado as estado_of,
                     f1.Anio_Emis,
                     f1.des_cod
@@ -14054,7 +14053,7 @@ def dashboard_control_detracciones():
             canvas_control.pack(side="left", fill="both", expand=True, padx=5, pady=5)
 
             # Encabezados de tabla
-            headers = ["RUC", "Razón Social", "Saldo", "N° Orden", "Auditor", "Estado", "Año"]
+            headers = ["RUC", "Razón Social", "Saldo", "N° Orden", "Descripción", "Estado", "Año"]
             widths = [120, 250, 120, 120, 180, 100, 80]
 
             header_frame = ctk.CTkFrame(frame_tabla_inner, fg_color="#1E40AF", height=40)
@@ -14092,9 +14091,9 @@ def dashboard_control_detracciones():
                 num_ord = str(row['NUM_ORD_FI']) if pd.notna(row['NUM_ORD_FI']) else "-"
                 ctk.CTkLabel(row_frame, text=num_ord,
                             font=("Segoe UI", 10), text_color="#333", width=120).pack(side="left", padx=2)
-                # Auditor
-                auditor = str(row['des_func'] or "-")[:25]
-                ctk.CTkLabel(row_frame, text=auditor,
+                # Descripción (des_cod)
+                descripcion = str(row['des_cod'] or "-")[:25]
+                ctk.CTkLabel(row_frame, text=descripcion,
                             font=("Segoe UI", 10), text_color="#333", width=180, anchor="w").pack(side="left", padx=2)
                 # Estado
                 estado = str(row['estado_of'] or "-")
