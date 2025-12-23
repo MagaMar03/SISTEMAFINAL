@@ -223,6 +223,82 @@ def consulta_rapida(query, cache_key=None, ttl=300):
         print(f"Error en consulta: {e}")
         return pd.DataFrame()
 
+def ejecutar_con_loading(parent_widget, funcion_pesada, texto_loading="Cargando..."):
+    """
+    Ejecuta una función pesada en segundo plano mostrando un indicador de carga.
+    Esto hace que la UI responda inmediatamente al clic.
+
+    Uso:
+        ejecutar_con_loading(frame, lambda: cargar_datos(), "Cargando datos...")
+    """
+    # Forzar actualización inmediata de la UI para que el clic se procese
+    try:
+        parent_widget.update_idletasks()
+    except:
+        pass
+
+    # Crear overlay de carga
+    loading_overlay = None
+    loading_label = None
+
+    try:
+        loading_overlay = ctk.CTkFrame(parent_widget, fg_color="rgba(255,255,255,0.9)")
+        loading_overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        loading_label = ctk.CTkLabel(loading_overlay, text=f"⏳ {texto_loading}",
+                                    font=("Segoe UI", 14, "bold"), text_color="#1E40AF")
+        loading_label.place(relx=0.5, rely=0.5, anchor="center")
+        parent_widget.update()
+    except:
+        pass
+
+    def ejecutar():
+        try:
+            funcion_pesada()
+        finally:
+            # Remover overlay en el hilo principal
+            def limpiar():
+                try:
+                    if loading_overlay:
+                        loading_overlay.destroy()
+                except:
+                    pass
+            try:
+                app.after(0, limpiar)
+            except:
+                pass
+
+    # Ejecutar en segundo plano
+    threading.Thread(target=ejecutar, daemon=True).start()
+
+def hacer_click_rapido(boton, comando_pesado):
+    """
+    Wrapper para botones que ejecutan operaciones pesadas.
+    Hace que el botón responda inmediatamente y muestre feedback visual.
+    """
+    def wrapper():
+        # Cambiar apariencia del botón inmediatamente
+        try:
+            color_original = boton.cget("fg_color")
+            boton.configure(fg_color="#9CA3AF")  # Gris mientras carga
+            boton.update_idletasks()
+        except:
+            color_original = None
+
+        def restaurar_y_ejecutar():
+            try:
+                comando_pesado()
+            finally:
+                if color_original:
+                    try:
+                        app.after(0, lambda: boton.configure(fg_color=color_original))
+                    except:
+                        pass
+
+        threading.Thread(target=restaurar_y_ejecutar, daemon=True).start()
+
+    return wrapper
+
 def precargar_datos_iniciales():
     """Precarga datos comunes al inicio para acelerar la aplicación"""
     # Esta función se llama después de que data_cache existe
@@ -306,6 +382,26 @@ ctk.set_default_color_theme("blue")
 app = ctk.CTk()
 app.title("Sistema de Reportes")
 app.configure(fg_color=COLOR_GRAY_BG)
+
+# ==========================
+# OPTIMIZACIÓN DE RESPUESTA DE UI
+# ==========================
+def optimizar_respuesta_ui():
+    """Mejora la respuesta de la interfaz procesando eventos pendientes"""
+    try:
+        app.update_idletasks()
+        app.after(50, optimizar_respuesta_ui)  # Cada 50ms procesa eventos pendientes
+    except:
+        pass
+
+# Iniciar procesamiento de eventos en segundo plano
+app.after(100, optimizar_respuesta_ui)
+
+# Configurar para que los eventos del mouse tengan prioridad
+try:
+    app.tk.call('tk', 'scaling', 1.0)  # Evita problemas de DPI
+except:
+    pass
 
 # ---- ENCABEZADO SUPERIOR ----
 header = ctk.CTkFrame(app, fg_color="#feffff", height=100)
