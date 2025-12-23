@@ -13982,7 +13982,13 @@ def dashboard_control_detracciones():
     control_saldo_cargado = {"valor": False, "df_completo": None}
 
     def cargar_datos_control_saldo():
-        """Carga los datos cruzados de fiscalizaciones1 y fiscalizaciones4 con threading"""
+        """
+        Carga los datos cruzados de fiscalizaciones1 y fiscalizaciones4 con threading.
+        LÓGICA:
+        1. Filtrar fiscalizaciones1 donde Estado = 'Pendiente'
+        2. Cruzar NUM_DOCSEL (fiscalizaciones1) con num_ruc (fiscalizaciones4)
+        3. Mostrar todas las OFs coincidentes (puede haber varias por RUC)
+        """
         # Si ya se cargó, no volver a cargar
         if control_saldo_cargado["valor"]:
             return
@@ -14002,32 +14008,34 @@ def dashboard_control_detracciones():
         def cargar_en_hilo():
             """Ejecuta la consulta SQL en un hilo separado"""
             try:
-                # Query para cruzar fiscalizaciones4 con fiscalizaciones1
-                # Incluye columnas adicionales para el detalle de OF
+                # Query para cruzar:
+                # 1. Primero filtrar fiscalizaciones1 donde Estado = 'Pendiente'
+                # 2. Cruzar NUM_DOCSEL con num_ruc de fiscalizaciones4
+                # 3. Traer todas las OFs que coincidan (puede haber varias por RUC)
                 query_cruce = """
                     SELECT
-                        f4.num_ruc as RUC,
-                        f1.DDP_NOMBRE as RAZON_SOCIAL,
-                        f4.mto_saldo as SALDO,
-                        f1.NUM_ORD_FI as NUM_ORDEN,
-                        f1.des_cod as DESCRIPCION,
-                        f1.Estado as ESTADO,
-                        f1.Anio_Emis as ANIO,
+                        f1.NUM_DOCSEL,
+                        f1.NUM_ORD_FI,
+                        f1.reg_auditor,
+                        f1.nombre_auditor,
+                        f1.nombre_supervisor,
+                        f1.tipo_fiscalizacion,
+                        f1.DDP_NOMBRE,
+                        f1.des_cod,
+                        f1.Anio_Emis,
+                        f1.Estado,
+                        f4.mto_saldo,
                         CASE
                             WHEN m.ruc IS NOT NULL THEN 'SI'
                             ELSE 'NO'
-                        END as PADRON_MYPE,
-                        f1.reg_auditor as REG_AUDITOR,
-                        f1.nombre_auditor as NOMBRE_AUDITOR,
-                        f1.nombre_supervisor as NOMBRE_SUPERVISOR,
-                        f1.tipo_fiscalizacion as TIPO_FISCALIZACION
-                    FROM fiscalizaciones4 f4
-                    LEFT JOIN fiscalizaciones1 f1
-                        ON TRIM(f4.num_ruc) = TRIM(f1.NUM_DOCSEL)
+                        END as PADRON_MYPE
+                    FROM fiscalizaciones1 f1
+                    INNER JOIN fiscalizaciones4 f4
+                        ON TRIM(f1.NUM_DOCSEL) = TRIM(f4.num_ruc)
                     LEFT JOIN mypes m
-                        ON TRIM(f4.num_ruc) = TRIM(m.ruc)
-                    WHERE f4.mto_saldo > 0
-                    ORDER BY f4.mto_saldo DESC;
+                        ON TRIM(f1.NUM_DOCSEL) = TRIM(m.ruc)
+                    WHERE LOWER(TRIM(IFNULL(f1.Estado, ''))) = 'pendiente'
+                    ORDER BY f1.NUM_DOCSEL, f1.NUM_ORD_FI;
                 """
                 df_cruce = pd.read_sql(query_cruce, DB_ENGINE)
                 control_saldo_cargado["df_completo"] = df_cruce
@@ -14045,32 +14053,32 @@ def dashboard_control_detracciones():
             ctk.CTkLabel(frame_tabla_control, text=f"Error al cargar datos:\n{error_msg}",
                         font=("Segoe UI", 12), text_color="#DC2626").pack(pady=30)
 
-        def ver_detalle_of(ruc):
-            """Muestra detalle completo de la OF para un RUC específico"""
+        def ver_detalle_of(num_ord_fi):
+            """Muestra detalle completo de la OF para un NUM_ORD_FI específico"""
             df = control_saldo_cargado["df_completo"]
             if df is None:
                 return
 
-            # Buscar el registro
-            registro = df[df['RUC'] == ruc]
+            # Buscar el registro por NUM_ORD_FI
+            registro = df[df['NUM_ORD_FI'] == num_ord_fi]
             if registro.empty:
-                messagebox.showwarning("Aviso", "No se encontró información para este RUC")
+                messagebox.showwarning("Aviso", "No se encontró información para esta OF")
                 return
 
             row = registro.iloc[0]
 
             # Crear ventana de detalle
             detalle_win = ctk.CTkToplevel(app)
-            detalle_win.title(f"👁️ Detalle OF - RUC: {ruc}")
-            detalle_win.geometry("550x480")
+            detalle_win.title(f"👁️ Detalle OF - {num_ord_fi}")
+            detalle_win.geometry("600x550")
             detalle_win.transient(app)
             detalle_win.grab_set()
 
             # Centrar ventana
             detalle_win.update_idletasks()
-            x = (detalle_win.winfo_screenwidth() - 550) // 2
-            y = (detalle_win.winfo_screenheight() - 480) // 2
-            detalle_win.geometry(f"550x480+{x}+{y}")
+            x = (detalle_win.winfo_screenwidth() - 600) // 2
+            y = (detalle_win.winfo_screenheight() - 550) // 2
+            detalle_win.geometry(f"600x550+{x}+{y}")
 
             # Header
             header = ctk.CTkFrame(detalle_win, fg_color="#1E40AF", height=50)
@@ -14097,26 +14105,26 @@ def dashboard_control_detracciones():
             # Sección: Datos del Contribuyente
             ctk.CTkLabel(content, text="📋 DATOS DEL CONTRIBUYENTE", font=("Segoe UI", 12, "bold"),
                         text_color="#1E40AF").pack(anchor="w", pady=(5, 5), padx=5)
-            crear_campo(content, "RUC:", row['RUC'], True)
-            crear_campo(content, "Razón Social:", row['RAZON_SOCIAL'], True)
-            crear_campo(content, "Saldo Detracciones:", row['SALDO'], True)
+            crear_campo(content, "RUC (NUM_DOCSEL):", row['NUM_DOCSEL'], True)
+            crear_campo(content, "Razón Social:", row['DDP_NOMBRE'], True)
+            crear_campo(content, "Saldo Detracciones:", row['mto_saldo'], True)
             crear_campo(content, "Padrón MYPE:", row['PADRON_MYPE'])
 
             # Sección: Datos de la OF
             ctk.CTkLabel(content, text="📑 DATOS DE LA ORDEN DE FISCALIZACIÓN", font=("Segoe UI", 12, "bold"),
                         text_color="#1E40AF").pack(anchor="w", pady=(15, 5), padx=5)
-            crear_campo(content, "N° Orden Fiscalización:", row['NUM_ORDEN'], True)
-            crear_campo(content, "Descripción:", row['DESCRIPCION'])
-            crear_campo(content, "Estado:", row['ESTADO'])
-            crear_campo(content, "Año Emisión:", row['ANIO'])
-            crear_campo(content, "Tipo Fiscalización:", row['TIPO_FISCALIZACION'])
+            crear_campo(content, "N° Orden Fiscalización:", row['NUM_ORD_FI'], True)
+            crear_campo(content, "Descripción (des_cod):", row['des_cod'])
+            crear_campo(content, "Estado:", row['Estado'])
+            crear_campo(content, "Año Emisión:", row['Anio_Emis'])
+            crear_campo(content, "Tipo Fiscalización:", row['tipo_fiscalizacion'])
 
             # Sección: Personal Asignado
             ctk.CTkLabel(content, text="👥 PERSONAL ASIGNADO", font=("Segoe UI", 12, "bold"),
                         text_color="#1E40AF").pack(anchor="w", pady=(15, 5), padx=5)
-            crear_campo(content, "Reg. Auditor:", row['REG_AUDITOR'])
-            crear_campo(content, "Nombre Auditor:", row['NOMBRE_AUDITOR'], True)
-            crear_campo(content, "Nombre Supervisor:", row['NOMBRE_SUPERVISOR'], True)
+            crear_campo(content, "Reg. Auditor:", row['reg_auditor'])
+            crear_campo(content, "Nombre Auditor:", row['nombre_auditor'], True)
+            crear_campo(content, "Nombre Supervisor:", row['nombre_supervisor'], True)
 
             # Botón cerrar
             ctk.CTkButton(detalle_win, text="✖️ Cerrar", command=detalle_win.destroy,
@@ -14131,40 +14139,42 @@ def dashboard_control_detracciones():
                 pass
 
             if df_cruce.empty:
-                ctk.CTkLabel(frame_tabla_control, text="No se encontraron datos cruzados",
+                ctk.CTkLabel(frame_tabla_control, text="No se encontraron datos cruzados.\nNo hay OFs pendientes con saldo en detracciones.",
                             font=("Segoe UI", 14), text_color="#666666").pack(pady=30)
                 return
 
             control_saldo_cargado["valor"] = True
 
             # Calcular métricas
-            total_registros = len(df_cruce)
-            total_saldo = df_cruce['SALDO'].sum()
-            total_contribuyentes = df_cruce['RUC'].nunique()
-            total_of_vinculados = df_cruce['NUM_ORDEN'].notna().sum()
+            total_of = len(df_cruce)
+            total_saldo = df_cruce['mto_saldo'].sum()
+            total_contribuyentes = df_cruce['NUM_DOCSEL'].nunique()
+            total_mype = (df_cruce['PADRON_MYPE'] == 'SI').sum()
 
             # Crear cards de métricas
-            crear_card(metrics_control_container, "📋", "Total Registros", total_registros, "#c2e9fb", "#90cdf4")
+            crear_card(metrics_control_container, "📋", "Total OFs", total_of, "#c2e9fb", "#90cdf4")
             crear_card(metrics_control_container, "💰", "Saldo Total", f"S/ {total_saldo:,.2f}", "#c2e9fb", "#90cdf4")
             crear_card(metrics_control_container, "👥", "Contribuyentes", total_contribuyentes, "#c2e9fb", "#90cdf4")
-            crear_card(metrics_control_container, "🔗", "OF Vinculados", total_of_vinculados, "#c2e9fb", "#90cdf4")
+            crear_card(metrics_control_container, "🏢", "En Padrón MYPE", total_mype, "#c2e9fb", "#90cdf4")
 
             # Título de la tabla con instrucción
             titulo_frame = ctk.CTkFrame(frame_tabla_control, fg_color="transparent")
             titulo_frame.pack(fill="x", padx=12, pady=(10, 5))
             ctk.CTkLabel(titulo_frame,
-                        text="📊 CRUCE DE DATOS: SALDO DETRACCIONES - FISCALIZACIONES",
+                        text="📊 CRUCE: OFs PENDIENTES CON SALDO EN DETRACCIONES",
                         font=("Segoe UI", 14, "bold"), text_color="#1E40AF").pack(side="left")
             ctk.CTkLabel(titulo_frame,
-                        text="(Doble clic o botón 👁️ para ver detalle)",
+                        text="(Doble clic o 👁️ para ver detalle)",
                         font=("Segoe UI", 10), text_color="#6B7280").pack(side="left", padx=10)
 
             # Contenedor para la tabla con scroll
             container = ctk.CTkFrame(frame_tabla_control, fg_color="white")
             container.pack(fill="both", expand=True, padx=5, pady=5)
 
-            # Columnas de la tabla (sin las de detalle)
-            cols = ["VER", "RUC", "RAZON_SOCIAL", "SALDO", "NUM_ORDEN", "DESCRIPCION", "ESTADO", "ANIO", "PADRON_MYPE"]
+            # Columnas de la tabla en el orden solicitado
+            cols = ["VER", "NUM_DOCSEL", "NUM_ORD_FI", "reg_auditor", "nombre_auditor",
+                    "nombre_supervisor", "tipo_fiscalizacion", "DDP_NOMBRE", "des_cod",
+                    "Anio_Emis", "mto_saldo", "PADRON_MYPE"]
             tree = ttk.Treeview(container, columns=cols, show="headings")
 
             # Scrollbars
@@ -14181,14 +14191,17 @@ def dashboard_control_detracciones():
 
             # Configurar encabezados y anchos
             headers_config = {
-                "VER": ("👁️", 40),
-                "RUC": ("RUC", 110),
-                "RAZON_SOCIAL": ("Razón Social", 220),
-                "SALDO": ("Saldo Detracc.", 110),
-                "NUM_ORDEN": ("N° Orden FI", 110),
-                "DESCRIPCION": ("Descripción", 140),
-                "ESTADO": ("Estado", 90),
-                "ANIO": ("Año", 60),
+                "VER": ("👁️", 35),
+                "NUM_DOCSEL": ("RUC", 100),
+                "NUM_ORD_FI": ("N° Orden FI", 100),
+                "reg_auditor": ("Reg. Auditor", 90),
+                "nombre_auditor": ("Nombre Auditor", 150),
+                "nombre_supervisor": ("Nombre Supervisor", 150),
+                "tipo_fiscalizacion": ("Tipo Fiscalización", 120),
+                "DDP_NOMBRE": ("Razón Social", 180),
+                "des_cod": ("Descripción", 120),
+                "Anio_Emis": ("Año", 50),
+                "mto_saldo": ("Saldo Detracc.", 100),
                 "PADRON_MYPE": ("MYPE", 50)
             }
 
@@ -14199,29 +14212,32 @@ def dashboard_control_detracciones():
 
             # Estilos para el Treeview
             style = ttk.Style()
-            style.configure("Treeview", font=("Segoe UI", 10), rowheight=28)
-            style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"))
+            style.configure("Treeview", font=("Segoe UI", 9), rowheight=26)
+            style.configure("Treeview.Heading", font=("Segoe UI", 9, "bold"))
 
-            # Tags para colores
-            tree.tag_configure("vinculado", background="#ECFDF5")  # Verde claro para vinculados
-            tree.tag_configure("no_vinculado", background="#FEF3C7")  # Amarillo para no vinculados
+            # Tags para colores alternados
+            tree.tag_configure("par", background="#FFFFFF")
+            tree.tag_configure("impar", background="#F8FAFC")
+            tree.tag_configure("mype", background="#DBEAFE")  # Azul claro para MYPE
 
             # Insertar datos
             for idx, row in df_cruce.iterrows():
                 valores = ["👁️"]  # Columna para ver detalle
                 for col in cols[1:]:  # Saltar la primera columna VER
                     val = row[col]
-                    if col == "SALDO":
+                    if col == "mto_saldo":
                         val = f"S/ {float(val):,.2f}" if pd.notna(val) else "S/ 0.00"
                     elif pd.isna(val):
                         val = "-"
                     valores.append(val)
 
-                # Determinar tag según vinculación
-                if pd.notna(row['NUM_ORDEN']):
-                    tag = "vinculado"
+                # Determinar tag según fila
+                if row['PADRON_MYPE'] == 'SI':
+                    tag = "mype"
+                elif idx % 2 == 0:
+                    tag = "par"
                 else:
-                    tag = "no_vinculado"
+                    tag = "impar"
 
                 tree.insert("", "end", values=valores, tags=(tag,))
 
@@ -14230,8 +14246,8 @@ def dashboard_control_detracciones():
                 item = tree.selection()
                 if item:
                     valores = tree.item(item[0], 'values')
-                    ruc = valores[1]  # RUC está en la segunda posición
-                    ver_detalle_of(ruc)
+                    num_ord_fi = valores[2]  # NUM_ORD_FI está en la tercera posición
+                    ver_detalle_of(num_ord_fi)
 
             # Evento clic en columna VER
             def on_single_click(event):
@@ -14242,8 +14258,8 @@ def dashboard_control_detracciones():
                         item = tree.identify_row(event.y)
                         if item:
                             valores = tree.item(item, 'values')
-                            ruc = valores[1]
-                            ver_detalle_of(ruc)
+                            num_ord_fi = valores[2]  # NUM_ORD_FI
+                            ver_detalle_of(num_ord_fi)
 
             tree.bind("<Double-1>", on_double_click)
             tree.bind("<Button-1>", on_single_click)
@@ -14254,12 +14270,16 @@ def dashboard_control_detracciones():
                 filename = filedialog.asksaveasfilename(
                     defaultextension=".xlsx",
                     filetypes=[("Excel files", "*.xlsx")],
-                    title="Guardar cruce de datos"
+                    title="Guardar cruce de datos - Control de Saldo"
                 )
                 if filename:
-                    # Crear DataFrame para exportar con formato (incluye columnas de detalle)
+                    # Crear DataFrame para exportar con formato
                     df_export = df_cruce.copy()
-                    df_export['SALDO'] = df_export['SALDO'].apply(lambda x: f"S/ {x:,.2f}" if pd.notna(x) else "S/ 0.00")
+                    df_export['mto_saldo'] = df_export['mto_saldo'].apply(lambda x: f"S/ {x:,.2f}" if pd.notna(x) else "S/ 0.00")
+                    # Renombrar columnas para el Excel
+                    df_export.columns = ['RUC', 'N° Orden FI', 'Reg. Auditor', 'Nombre Auditor',
+                                        'Nombre Supervisor', 'Tipo Fiscalización', 'Razón Social',
+                                        'Descripción', 'Año Emisión', 'Estado', 'Saldo Detracciones', 'Padrón MYPE']
                     df_export.to_excel(filename, index=False)
                     messagebox.showinfo("Éxito", f"Datos exportados a:\n{filename}")
 
@@ -14285,10 +14305,8 @@ def dashboard_control_detracciones():
             leyenda_frame = ctk.CTkFrame(btn_frame, fg_color="transparent")
             leyenda_frame.pack(side="right", padx=10)
 
-            ctk.CTkLabel(leyenda_frame, text="🟢 Con OF vinculado", font=("Segoe UI", 9),
-                        text_color="#059669").pack(side="left", padx=10)
-            ctk.CTkLabel(leyenda_frame, text="🟡 Sin OF vinculado", font=("Segoe UI", 9),
-                        text_color="#D97706").pack(side="left", padx=10)
+            ctk.CTkLabel(leyenda_frame, text="🔵 En Padrón MYPE", font=("Segoe UI", 9),
+                        text_color="#1D4ED8").pack(side="left", padx=10)
 
         # Iniciar carga en hilo separado
         threading.Thread(target=cargar_en_hilo, daemon=True).start()
