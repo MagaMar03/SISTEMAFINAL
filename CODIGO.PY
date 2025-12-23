@@ -17773,7 +17773,616 @@ def mostrar_dashboard_metas():
 
     # Botón METAS AI
     def mostrar_metas_ai():
-        messagebox.showinfo("Metas AI", "Funcionalidad de Metas AI en desarrollo")
+        """
+        Muestra la gestión de metas AI dentro del dashboard principal
+        """
+        # Limpiar el dashboard
+        for widget in dashboard_frame.winfo_children():
+            widget.destroy()
+
+        # Variables globales de la ventana
+        auditores_data_ai = {}  # {nombre_auditor: {'entry': widget, 'var': StringVar}}
+        auditores_excluidos_ai = {}  # {nombre_auditor: {'excluido': bool, 'monto_fijo': float or None}}
+        meta_anual_var_ai = tk.StringVar(value="0.00")
+        suma_total_var_ai = tk.StringVar(value="0.00")
+        modo_edicion_ai = tk.BooleanVar(value=False)
+        fecha_guardado_var_ai = tk.StringVar(value="")
+        anio_actual_ai = datetime.now().year
+
+        # Canvas principal con scroll
+        canvas_ai = tk.Canvas(dashboard_frame, bg=COLOR_WHITE, highlightthickness=0)
+        scrollbar_ai = ctk.CTkScrollbar(dashboard_frame, orientation="vertical", command=canvas_ai.yview)
+        canvas_ai.configure(yscrollcommand=scrollbar_ai.set)
+
+        main_frame_ai = ctk.CTkFrame(canvas_ai, fg_color=COLOR_WHITE)
+        canvas_window_ai = canvas_ai.create_window((0, 0), window=main_frame_ai, anchor="nw")
+
+        def _on_frame_configure_ai(event=None):
+            canvas_ai.configure(scrollregion=canvas_ai.bbox("all"))
+            if canvas_ai.winfo_width() > 1:
+                canvas_ai.itemconfig(canvas_window_ai, width=canvas_ai.winfo_width())
+
+        main_frame_ai.bind("<Configure>", _on_frame_configure_ai)
+        canvas_ai.bind("<Configure>", _on_frame_configure_ai)
+
+        canvas_ai.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+        scrollbar_ai.pack(side="right", fill="y")
+
+        # ====================
+        # ENCABEZADO CON BOTÓN VOLVER
+        # ====================
+        header_frame_ai = ctk.CTkFrame(main_frame_ai, fg_color="#6366F1", corner_radius=10)
+        header_frame_ai.pack(fill="x", padx=10, pady=(10, 5))
+
+        header_inner_ai = ctk.CTkFrame(header_frame_ai, fg_color="transparent")
+        header_inner_ai.pack(fill="x", padx=15, pady=12)
+
+        # Botón volver
+        def volver_dashboard_ai():
+            canvas_ai.pack_forget()
+            scrollbar_ai.pack_forget()
+            mostrar_dashboard_metas()
+
+        ctk.CTkButton(header_inner_ai, text="← Volver", command=volver_dashboard_ai,
+                    fg_color="transparent", hover_color="#4F46E5",
+                    font=("Segoe UI", 11, "bold"), width=100, height=32,
+                    border_width=2, border_color="white").pack(side="left")
+
+        ctk.CTkLabel(header_inner_ai, text="🎯 GESTIÓN DE METAS ANUALES - AI",
+                    font=("Segoe UI", 16, "bold"), text_color="white").pack(side="left", padx=20, expand=True)
+
+        # ====================
+        # SECCIÓN META ANUAL
+        # ====================
+        meta_frame_ai = ctk.CTkFrame(main_frame_ai, fg_color=COLOR_BOX, corner_radius=10)
+        meta_frame_ai.pack(fill="x", padx=10, pady=(10, 10))
+
+        meta_inner_ai = ctk.CTkFrame(meta_frame_ai, fg_color="transparent")
+        meta_inner_ai.pack(fill="x", padx=15, pady=15)
+
+        ctk.CTkLabel(meta_inner_ai, text="💰 Meta Anual Total:",
+                    font=("Segoe UI", 13, "bold"), text_color=COLOR_TEXT).pack(side="left", padx=(0, 10))
+
+        entry_meta_anual_ai = ctk.CTkEntry(meta_inner_ai, textvariable=meta_anual_var_ai,
+                                        font=("Segoe UI", 13), width=200, height=35,
+                                        border_color="#6366F1", border_width=2)
+        entry_meta_anual_ai.pack(side="left", padx=(0, 15))
+
+        def actualizar_indicadores_visuales_ai():
+            """Actualiza los indicadores visuales de estado en la tabla de auditores AI"""
+            for nombre, data in auditores_data_ai.items():
+                exclusion = auditores_excluidos_ai.get(nombre, {})
+                estado_label = data.get('estado_label')
+                frame = data.get('frame')
+                nombre_label = data.get('nombre_label')
+
+                if estado_label:
+                    if exclusion.get('excluido', False):
+                        estado_label.configure(text="🚫 EXCLUIDO", text_color="#DC2626")
+                        if frame:
+                            frame.configure(fg_color="#FEE2E2")
+                        if nombre_label:
+                            nombre_label.configure(text_color="#991B1B")
+                    elif exclusion.get('monto_fijo') is not None:
+                        estado_label.configure(text="📌 FIJO", text_color="#D97706")
+                        if frame:
+                            frame.configure(fg_color="#FEF3C7")
+                        if nombre_label:
+                            nombre_label.configure(text_color="#92400E")
+                    else:
+                        estado_label.configure(text="", text_color=COLOR_TEXT)
+                        if frame:
+                            frame.configure(fg_color=COLOR_BOX)
+                        if nombre_label:
+                            nombre_label.configure(text_color=COLOR_TEXT)
+
+        def distribuir_equitativamente_ai():
+            """Divide la meta anual equitativamente entre los auditores AI no excluidos"""
+            try:
+                meta = float(meta_anual_var_ai.get().replace(",", ""))
+
+                auditores_participantes = []
+                suma_montos_fijos = 0.0
+
+                for nombre, data in auditores_data_ai.items():
+                    exclusion = auditores_excluidos_ai.get(nombre, {})
+
+                    if exclusion.get('excluido', False):
+                        data['var'].set("0.00")
+                    elif exclusion.get('monto_fijo') is not None:
+                        monto_fijo = exclusion['monto_fijo']
+                        data['var'].set(f"{monto_fijo:,.2f}")
+                        suma_montos_fijos += monto_fijo
+                    else:
+                        auditores_participantes.append(nombre)
+
+                monto_restante = meta - suma_montos_fijos
+
+                if monto_restante < 0:
+                    messagebox.showwarning("Advertencia",
+                        f"Los montos fijos (S/ {suma_montos_fijos:,.2f}) superan la meta (S/ {meta:,.2f})")
+                    return
+
+                if len(auditores_participantes) == 0:
+                    if suma_montos_fijos > 0:
+                        messagebox.showinfo("Info", "Todos los auditores tienen montos fijos o están excluidos")
+                    else:
+                        messagebox.showwarning("Advertencia", "No hay auditores para distribuir")
+                    calcular_suma_total_ai()
+                    actualizar_indicadores_visuales_ai()
+                    return
+
+                monto_por_auditor = monto_restante / len(auditores_participantes)
+
+                for nombre in auditores_participantes:
+                    auditores_data_ai[nombre]['var'].set(f"{monto_por_auditor:,.2f}")
+
+                calcular_suma_total_ai()
+                actualizar_indicadores_visuales_ai()
+
+            except ValueError:
+                messagebox.showerror("Error", "Ingrese un monto válido")
+
+        def mostrar_popup_exclusiones_ai():
+            """Muestra popup para configurar exclusiones y montos fijos de auditores AI"""
+            popup = ctk.CTkToplevel(app)
+            popup.title("🚫 Configurar Exclusiones de Auditores AI")
+            popup.geometry("700x550")
+            popup.transient(app)
+            popup.grab_set()
+
+            popup.update_idletasks()
+            x = (popup.winfo_screenwidth() // 2) - (350)
+            y = (popup.winfo_screenheight() // 2) - (275)
+            popup.geometry(f"700x550+{x}+{y}")
+
+            main_popup = ctk.CTkFrame(popup, fg_color="#F5F5F5")
+            main_popup.pack(fill="both", expand=True, padx=15, pady=15)
+
+            ctk.CTkLabel(main_popup,
+                        text="🚫 Configurar Exclusiones de Auditores AI",
+                        font=("Segoe UI", 16, "bold"),
+                        text_color="#6366F1").pack(pady=(10, 5))
+
+            ctk.CTkLabel(main_popup,
+                        text="Marque para excluir completamente o asigne un monto fijo",
+                        font=("Segoe UI", 11),
+                        text_color="#666666").pack(pady=(0, 15))
+
+            scroll_frame = ctk.CTkScrollableFrame(main_popup, fg_color="white", height=350)
+            scroll_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+            header_frame = ctk.CTkFrame(scroll_frame, fg_color="#E5E7EB", height=40)
+            header_frame.pack(fill="x", pady=(0, 5))
+            header_frame.pack_propagate(False)
+
+            ctk.CTkLabel(header_frame, text="Auditor", font=("Segoe UI", 11, "bold"),
+                        text_color=COLOR_TEXT, width=250).pack(side="left", padx=10)
+            ctk.CTkLabel(header_frame, text="Excluir", font=("Segoe UI", 11, "bold"),
+                        text_color=COLOR_TEXT, width=80).pack(side="left", padx=5)
+            ctk.CTkLabel(header_frame, text="Monto Fijo (S/)", font=("Segoe UI", 11, "bold"),
+                        text_color=COLOR_TEXT, width=150).pack(side="left", padx=5)
+
+            controles_popup = {}
+
+            for nombre in sorted(auditores_data_ai.keys()):
+                row_frame = ctk.CTkFrame(scroll_frame, fg_color="white", height=45)
+                row_frame.pack(fill="x", pady=2)
+                row_frame.pack_propagate(False)
+
+                ctk.CTkLabel(row_frame, text=nombre[:35] + "..." if len(nombre) > 35 else nombre,
+                            font=("Segoe UI", 10), text_color=COLOR_TEXT,
+                            width=250, anchor="w").pack(side="left", padx=10)
+
+                exclusion_actual = auditores_excluidos_ai.get(nombre, {})
+
+                var_excluir = tk.BooleanVar(value=exclusion_actual.get('excluido', False))
+                chk_excluir = ctk.CTkCheckBox(row_frame, text="", variable=var_excluir,
+                                            width=80, checkbox_width=20, checkbox_height=20,
+                                            fg_color=COLOR_DANGER, hover_color="#B91C1C")
+                chk_excluir.pack(side="left", padx=5)
+
+                monto_actual = exclusion_actual.get('monto_fijo')
+                var_monto = tk.StringVar(value=f"{monto_actual:,.2f}" if monto_actual else "")
+                entry_monto = ctk.CTkEntry(row_frame, textvariable=var_monto,
+                                          width=150, height=30, font=("Segoe UI", 10),
+                                          placeholder_text="Vacío = equitativo")
+                entry_monto.pack(side="left", padx=5)
+
+                def toggle_entry(var_e, entry_m, nombre_aud):
+                    def _toggle():
+                        if var_e.get():
+                            entry_m.configure(state="disabled")
+                            entry_m.delete(0, tk.END)
+                        else:
+                            entry_m.configure(state="normal")
+                    return _toggle
+
+                var_excluir.trace_add("write", lambda *args, v=var_excluir, e=entry_monto, n=nombre: toggle_entry(v, e, n)())
+
+                if var_excluir.get():
+                    entry_monto.configure(state="disabled")
+
+                controles_popup[nombre] = {
+                    'var_excluir': var_excluir,
+                    'var_monto': var_monto
+                }
+
+            btn_frame = ctk.CTkFrame(main_popup, fg_color="transparent")
+            btn_frame.pack(fill="x", pady=15)
+
+            def aplicar_exclusiones_ai():
+                """Guarda las configuraciones de exclusión AI"""
+                auditores_excluidos_ai.clear()
+
+                for nombre, controles in controles_popup.items():
+                    excluido = controles['var_excluir'].get()
+                    monto_str = controles['var_monto'].get().replace(",", "").strip()
+
+                    monto_fijo = None
+                    if monto_str and not excluido:
+                        try:
+                            monto_fijo = float(monto_str)
+                        except ValueError:
+                            pass
+
+                    if excluido or monto_fijo is not None:
+                        auditores_excluidos_ai[nombre] = {
+                            'excluido': excluido,
+                            'monto_fijo': monto_fijo if not excluido else None
+                        }
+
+                excluidos_count = sum(1 for v in auditores_excluidos_ai.values() if v.get('excluido'))
+                fijos_count = sum(1 for v in auditores_excluidos_ai.values() if v.get('monto_fijo') is not None)
+
+                popup.destroy()
+
+                actualizar_indicadores_visuales_ai()
+
+                try:
+                    meta_total = float(meta_anual_var_ai.get().replace(",", ""))
+                except ValueError:
+                    meta_total = 0.0
+
+                suma_montos_fijos = 0.0
+                auditores_participantes = []
+
+                for nombre_aud, data in auditores_data_ai.items():
+                    exclusion = auditores_excluidos_ai.get(nombre_aud, {})
+                    if exclusion.get('excluido', False):
+                        data['var'].set("0.00")
+                        data['entry'].configure(state="disabled")
+                    elif exclusion.get('monto_fijo') is not None:
+                        monto_fijo = exclusion['monto_fijo']
+                        data['var'].set(f"{monto_fijo:,.2f}")
+                        data['entry'].configure(state="disabled")
+                        suma_montos_fijos += monto_fijo
+                    else:
+                        data['entry'].configure(state="normal")
+                        auditores_participantes.append(nombre_aud)
+
+                monto_restante = meta_total - suma_montos_fijos
+                monto_distribuido = 0.0
+
+                if len(auditores_participantes) > 0 and monto_restante > 0:
+                    monto_por_auditor = monto_restante / len(auditores_participantes)
+                    for nombre_aud in auditores_participantes:
+                        auditores_data_ai[nombre_aud]['var'].set(f"{monto_por_auditor:,.2f}")
+                    monto_distribuido = monto_por_auditor
+
+                calcular_suma_total_ai()
+
+                msg = f"✅ Configuración guardada:\n\n"
+                msg += f"• Auditores excluidos: {excluidos_count}\n"
+                msg += f"• Auditores con monto fijo: {fijos_count} (S/ {suma_montos_fijos:,.2f})\n"
+                msg += f"• Auditores para distribución: {len(auditores_participantes)}\n"
+                if monto_distribuido > 0:
+                    msg += f"• Monto por auditor: S/ {monto_distribuido:,.2f}"
+
+                messagebox.showinfo("Exclusiones Configuradas", msg)
+
+            def limpiar_exclusiones_ai():
+                """Limpia todas las exclusiones AI"""
+                for controles in controles_popup.values():
+                    controles['var_excluir'].set(False)
+                    controles['var_monto'].set("")
+
+            ctk.CTkButton(btn_frame, text="🗑️ Limpiar Todo", command=limpiar_exclusiones_ai,
+                        fg_color="#6B7280", hover_color="#4B5563",
+                        font=("Segoe UI", 11, "bold"), width=140, height=35).pack(side="left", padx=10)
+
+            ctk.CTkButton(btn_frame, text="❌ Cancelar", command=popup.destroy,
+                        fg_color=COLOR_DANGER, hover_color="#B91C1C",
+                        font=("Segoe UI", 11, "bold"), width=120, height=35).pack(side="right", padx=10)
+
+            ctk.CTkButton(btn_frame, text="✅ Aplicar", command=aplicar_exclusiones_ai,
+                        fg_color="#059669", hover_color="#047857",
+                        font=("Segoe UI", 11, "bold"), width=120, height=35).pack(side="right", padx=5)
+
+        ctk.CTkButton(meta_inner_ai, text="⚖️ Distribuir Equitativamente",
+                    command=distribuir_equitativamente_ai,
+                    fg_color="#6366F1", hover_color="#4F46E5",
+                    font=("Segoe UI", 11, "bold"), width=200, height=35).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(meta_inner_ai, text="🚫 Excluir",
+                    command=mostrar_popup_exclusiones_ai,
+                    fg_color="#DC2626", hover_color="#B91C1C",
+                    font=("Segoe UI", 11, "bold"), width=120, height=35).pack(side="left")
+
+        # ====================
+        # SECCIÓN RESUMEN
+        # ====================
+        resumen_frame_ai = ctk.CTkFrame(main_frame_ai, fg_color="#EEF2FF", corner_radius=10, border_width=2, border_color="#6366F1")
+        resumen_frame_ai.pack(fill="x", padx=10, pady=(0, 10))
+
+        resumen_inner_ai = ctk.CTkFrame(resumen_frame_ai, fg_color="transparent")
+        resumen_inner_ai.pack(fill="x", padx=15, pady=12)
+
+        ctk.CTkLabel(resumen_inner_ai, text="📊 Suma Total Asignada:",
+                    font=("Segoe UI", 12, "bold"), text_color="#4338CA").pack(side="left", padx=(0, 10))
+
+        label_suma_ai = ctk.CTkLabel(resumen_inner_ai, textvariable=suma_total_var_ai,
+                                font=("Segoe UI", 14, "bold"), text_color="#059669")
+        label_suma_ai.pack(side="left", padx=(0, 20))
+
+        diferencia_label_ai = ctk.CTkLabel(resumen_inner_ai, text="",
+                                        font=("Segoe UI", 11), text_color="#DC2626")
+        diferencia_label_ai.pack(side="left")
+
+        fecha_label_ai = ctk.CTkLabel(resumen_inner_ai, textvariable=fecha_guardado_var_ai,
+                                font=("Segoe UI", 10, "italic"), text_color="#6B7280")
+        fecha_label_ai.pack(side="right")
+
+        def calcular_suma_total_ai():
+            """Calcula la suma de todos los montos asignados AI y muestra diferencias"""
+            try:
+                suma = 0.0
+                for nombre, data in auditores_data_ai.items():
+                    valor = data['var'].get().replace(",", "")
+                    if valor and valor != "":
+                        suma += float(valor)
+
+                suma_total_var_ai.set(f"S/ {suma:,.2f}")
+
+                try:
+                    meta = float(meta_anual_var_ai.get().replace(",", ""))
+                    diferencia = suma - meta
+
+                    if abs(diferencia) < 0.01:
+                        diferencia_label_ai.configure(text="✅ Distribución correcta", text_color="#059669")
+                        label_suma_ai.configure(text_color="#059669")
+                    elif diferencia > 0:
+                        diferencia_label_ai.configure(text=f"⚠️ Excede en S/ {diferencia:,.2f}", text_color="#DC2626")
+                        label_suma_ai.configure(text_color="#DC2626")
+                    else:
+                        diferencia_label_ai.configure(text=f"⚠️ Falta asignar S/ {abs(diferencia):,.2f}", text_color="#F59E0B")
+                        label_suma_ai.configure(text_color="#F59E0B")
+                except:
+                    diferencia_label_ai.configure(text="")
+            except:
+                suma_total_var_ai.set("S/ 0.00")
+
+        # ====================
+        # SECCIÓN AUDITORES (CON SCROLL)
+        # ====================
+        auditores_container_frame_ai = ctk.CTkFrame(main_frame_ai, fg_color=COLOR_BOX, corner_radius=10)
+        auditores_container_frame_ai.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        ctk.CTkLabel(auditores_container_frame_ai, text="👥 Distribución por Auditor",
+                    font=("Segoe UI", 13, "bold"), text_color=COLOR_TEXT, anchor="w").pack(fill="x", padx=15, pady=(15, 10))
+
+        canvas_auditores_ai = tk.Canvas(auditores_container_frame_ai, bg=COLOR_WHITE, highlightthickness=0, height=300)
+        scrollbar_auditores_ai = ctk.CTkScrollbar(auditores_container_frame_ai, orientation="vertical", command=canvas_auditores_ai.yview)
+        canvas_auditores_ai.configure(yscrollcommand=scrollbar_auditores_ai.set)
+
+        frame_auditores_ai = ctk.CTkFrame(canvas_auditores_ai, fg_color=COLOR_WHITE)
+        canvas_window_aud_ai = canvas_auditores_ai.create_window((0, 0), window=frame_auditores_ai, anchor="nw")
+
+        def on_frame_configure_aud_ai(event=None):
+            canvas_auditores_ai.configure(scrollregion=canvas_auditores_ai.bbox("all"))
+            if canvas_auditores_ai.winfo_width() > 1:
+                canvas_auditores_ai.itemconfig(canvas_window_aud_ai, width=canvas_auditores_ai.winfo_width())
+
+        frame_auditores_ai.bind("<Configure>", on_frame_configure_aud_ai)
+        canvas_auditores_ai.bind("<Configure>", on_frame_configure_aud_ai)
+
+        canvas_auditores_ai.pack(side="left", fill="both", expand=True, padx=(15, 5), pady=(0, 15))
+        scrollbar_auditores_ai.pack(side="right", fill="y", padx=(0, 15), pady=(0, 15))
+
+        # ====================
+        # CARGAR AUDITORES Y DATOS AI
+        # ====================
+        def cargar_auditores_ai():
+            """Carga auditores únicos de fiscalizaciones3 (AI) y verifica si hay datos guardados"""
+            try:
+                loading_label = ctk.CTkLabel(frame_auditores_ai, text="⏳ Cargando auditores AI...",
+                                           font=("Segoe UI", 12, "bold"), text_color="#6366F1")
+                loading_label.pack(pady=20)
+                frame_auditores_ai.update()
+
+                cache_key_auditores = "metas_auditores_ai"
+                df_auditores = data_cache.get(cache_key_auditores)
+                if df_auditores is None:
+                    query_auditores = """
+                        SELECT DISTINCT DES_NOMB_VER as des_func
+                        FROM fiscalizaciones3
+                        WHERE DES_NOMB_VER IS NOT NULL AND DES_NOMB_VER != ''
+                        ORDER BY DES_NOMB_VER
+                    """
+                    df_auditores = pd.read_sql(query_auditores, DB_ENGINE)
+                    data_cache.set(cache_key_auditores, df_auditores)
+
+                loading_label.destroy()
+
+                if df_auditores.empty:
+                    messagebox.showwarning("Advertencia", "No se encontraron auditores AI en la base de datos")
+                    volver_dashboard_ai()
+                    return
+
+                query_guardados = """
+                    SELECT nombre_auditor, monto_asignado, monto_anual, fecha
+                    FROM distribucion
+                    WHERE tipo = 'AI' AND anio = %s
+                """
+                df_guardados = pd.read_sql(query_guardados, DB_ENGINE, params=(anio_actual_ai,))
+
+                if not df_guardados.empty:
+                    modo_edicion_ai.set(True)
+                    meta_anual_var_ai.set(f"{df_guardados['monto_anual'].iloc[0]:,.2f}")
+                    fecha_guardado_var_ai.set(f"📅 Última actualización: {df_guardados['fecha'].iloc[0].strftime('%d/%m/%Y %H:%M')}")
+
+                    montos_guardados = {}
+                    for idx, row in df_guardados.iterrows():
+                        montos_guardados[row['nombre_auditor']] = row['monto_asignado']
+                else:
+                    modo_edicion_ai.set(False)
+                    montos_guardados = {}
+
+                for idx, row in df_auditores.iterrows():
+                    nombre_auditor = row['des_func']
+
+                    auditor_frame = ctk.CTkFrame(frame_auditores_ai, fg_color=COLOR_BOX, corner_radius=8)
+                    auditor_frame.pack(fill="x", padx=5, pady=3)
+
+                    inner_frame = ctk.CTkFrame(auditor_frame, fg_color="transparent")
+                    inner_frame.pack(fill="x", padx=10, pady=8)
+
+                    estado_label = ctk.CTkLabel(inner_frame, text="",
+                                              font=("Segoe UI", 9, "bold"), width=80)
+                    estado_label.pack(side="left", padx=(0, 5))
+
+                    nombre_label = ctk.CTkLabel(inner_frame, text=f"👤 {nombre_auditor}",
+                                font=("Segoe UI", 11), text_color=COLOR_TEXT,
+                                width=280, anchor="w")
+                    nombre_label.pack(side="left", padx=(0, 10))
+
+                    monto_var = tk.StringVar(value="0.00")
+
+                    if nombre_auditor in montos_guardados:
+                        monto_var.set(f"{montos_guardados[nombre_auditor]:,.2f}")
+
+                    def on_monto_change(*args, var=monto_var):
+                        calcular_suma_total_ai()
+
+                    monto_var.trace_add("write", on_monto_change)
+
+                    entry_monto = ctk.CTkEntry(inner_frame, textvariable=monto_var,
+                                            font=("Segoe UI", 11), width=180, height=32,
+                                            border_color="#D1D5DB", border_width=1,
+                                            placeholder_text="0.00")
+                    entry_monto.pack(side="left", padx=(0, 5))
+
+                    ctk.CTkLabel(inner_frame, text="S/",
+                                font=("Segoe UI", 11, "bold"), text_color="#6366F1").pack(side="left")
+
+                    auditores_data_ai[nombre_auditor] = {
+                        'entry': entry_monto,
+                        'var': monto_var,
+                        'frame': auditor_frame,
+                        'estado_label': estado_label,
+                        'nombre_label': nombre_label
+                    }
+
+                calcular_suma_total_ai()
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Error al cargar auditores AI:\n{e}")
+                volver_dashboard_ai()
+
+        # ====================
+        # BOTONES DE ACCIÓN
+        # ====================
+        botones_frame_ai = ctk.CTkFrame(main_frame_ai, fg_color="transparent")
+        botones_frame_ai.pack(fill="x", padx=10, pady=(10, 15))
+
+        def guardar_metas_ai():
+            """Guarda o actualiza las metas AI en la base de datos"""
+            try:
+                try:
+                    meta_anual = float(meta_anual_var_ai.get().replace(",", ""))
+                except:
+                    messagebox.showerror("Error", "Ingrese una meta anual válida")
+                    return
+
+                if meta_anual <= 0:
+                    messagebox.showerror("Error", "La meta anual debe ser mayor a 0")
+                    return
+
+                suma_total = 0.0
+                datos_a_guardar = []
+
+                for nombre in auditores_data_ai.keys():
+                    data = auditores_data_ai[nombre]
+                    try:
+                        monto_str = data['var'].get().replace(",", "").strip()
+                        if not monto_str or monto_str == "":
+                            monto_str = "0"
+                        monto = float(monto_str)
+                        suma_total += monto
+                        datos_a_guardar.append(tuple([nombre, monto, meta_anual, anio_actual_ai]))
+                    except ValueError as ve:
+                        messagebox.showerror("Error", f"Monto inválido para {nombre}: {data['var'].get()}")
+                        return
+                    except Exception as ex:
+                        messagebox.showerror("Error", f"Error procesando {nombre}: {str(ex)}")
+                        return
+
+                diferencia = abs(suma_total - meta_anual)
+                if diferencia > 0.01:
+                    respuesta = messagebox.askyesno(
+                        "Advertencia",
+                        f"La suma total (S/ {suma_total:,.2f}) difiere de la meta anual (S/ {meta_anual:,.2f})\n"
+                        f"Diferencia: S/ {diferencia:,.2f}\n\n"
+                        "¿Desea guardar de todos modos?"
+                    )
+                    if not respuesta:
+                        return
+
+                connection = DB_ENGINE.raw_connection()
+                cursor = connection.cursor()
+
+                try:
+                    cursor.execute("""
+                        DELETE FROM distribucion
+                        WHERE tipo = 'AI' AND anio = %s
+                    """, (anio_actual_ai,))
+
+                    cursor.executemany("""
+                        INSERT INTO distribucion
+                        (nombre_auditor, monto_asignado, monto_anual, anio, tipo, fecha)
+                        VALUES (%s, %s, %s, %s, 'AI', NOW())
+                    """, datos_a_guardar)
+
+                    connection.commit()
+
+                    messagebox.showinfo("Éxito", f"✅ Metas AI guardadas correctamente\n\n"
+                                                f"Total de auditores: {len(datos_a_guardar)}\n"
+                                                f"Meta anual: S/ {meta_anual:,.2f}\n"
+                                                f"Suma asignada: S/ {suma_total:,.2f}")
+
+                    fecha_guardado_var_ai.set(f"📅 Última actualización: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+                    modo_edicion_ai.set(True)
+
+                except Exception as e:
+                    connection.rollback()
+                    raise e
+                finally:
+                    cursor.close()
+                    connection.close()
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Error al guardar metas AI:\n{e}")
+
+        ctk.CTkButton(botones_frame_ai, text="💾 Guardar Metas", command=guardar_metas_ai,
+                    fg_color="#10B981", hover_color="#059669",
+                    font=("Segoe UI", 12, "bold"), width=180, height=40).pack(side="left", padx=5)
+
+        ctk.CTkButton(botones_frame_ai, text="← Volver al Dashboard", command=volver_dashboard_ai,
+                    fg_color="#6B7280", hover_color="#4B5563",
+                    font=("Segoe UI", 12, "bold"), width=180, height=40).pack(side="right", padx=5)
+
+        # Cargar auditores al iniciar
+        main_frame_ai.after(100, cargar_auditores_ai)
 
     ctk.CTkButton(botones_ai_container, text="🎯 Metas", command=mostrar_metas_ai,
                   fg_color="#10B981", hover_color="#059669", font=("Segoe UI", 11, "bold"),
