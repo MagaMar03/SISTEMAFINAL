@@ -13976,8 +13976,15 @@ def dashboard_control_detracciones():
     frame_tabla_control = ctk.CTkFrame(contenido_control_saldo_frame, fg_color="white", corner_radius=12)
     frame_tabla_control.pack(pady=(5, 10), padx=12, fill="both", expand=True)
 
+    # Variable para evitar recargas múltiples
+    control_saldo_cargado = {"valor": False, "df_completo": None}
+
     def cargar_datos_control_saldo():
-        """Carga los datos cruzados de fiscalizaciones1 y fiscalizaciones4"""
+        """Carga los datos cruzados de fiscalizaciones1 y fiscalizaciones4 con threading"""
+        # Si ya se cargó, no volver a cargar
+        if control_saldo_cargado["valor"]:
+            return
+
         # Limpiar contenedores
         for widget in metrics_control_container.winfo_children():
             widget.destroy()
@@ -13988,40 +13995,145 @@ def dashboard_control_detracciones():
         loading_label = ctk.CTkLabel(frame_tabla_control, text="⏳ Cargando datos cruzados...",
                                     font=("Segoe UI", 14, "bold"), text_color="#1E40AF")
         loading_label.pack(pady=50)
-        frame_tabla_control.update()
+        frame_tabla_control.update_idletasks()
 
-        try:
-            # Query para cruzar fiscalizaciones4 con fiscalizaciones1
-            # Muestra todos los RUC de fiscalizaciones4 con saldo > 0 y sus datos vinculados de fiscalizaciones1
-            query_cruce = """
-                SELECT
-                    f4.num_ruc as RUC,
-                    f1.DDP_NOMBRE as RAZON_SOCIAL,
-                    f4.mto_saldo as SALDO,
-                    f1.NUM_ORD_FI as NUM_ORDEN,
-                    f1.des_cod as DESCRIPCION,
-                    f1.Estado as ESTADO,
-                    f1.Anio_Emis as ANIO,
-                    CASE
-                        WHEN m.ruc IS NOT NULL THEN 'SI'
-                        ELSE 'NO'
-                    END as PADRON_MYPE
-                FROM fiscalizaciones4 f4
-                LEFT JOIN fiscalizaciones1 f1
-                    ON TRIM(f4.num_ruc) = TRIM(f1.NUM_DOCSEL)
-                LEFT JOIN mypes m
-                    ON TRIM(f4.num_ruc) = TRIM(m.ruc)
-                WHERE f4.mto_saldo > 0
-                ORDER BY f4.mto_saldo DESC;
-            """
-            df_cruce = pd.read_sql(query_cruce, DB_ENGINE)
+        def cargar_en_hilo():
+            """Ejecuta la consulta SQL en un hilo separado"""
+            try:
+                # Query para cruzar fiscalizaciones4 con fiscalizaciones1
+                # Incluye columnas adicionales para el detalle de OF
+                query_cruce = """
+                    SELECT
+                        f4.num_ruc as RUC,
+                        f1.DDP_NOMBRE as RAZON_SOCIAL,
+                        f4.mto_saldo as SALDO,
+                        f1.NUM_ORD_FI as NUM_ORDEN,
+                        f1.des_cod as DESCRIPCION,
+                        f1.Estado as ESTADO,
+                        f1.Anio_Emis as ANIO,
+                        CASE
+                            WHEN m.ruc IS NOT NULL THEN 'SI'
+                            ELSE 'NO'
+                        END as PADRON_MYPE,
+                        f1.reg_auditor as REG_AUDITOR,
+                        f1.nombre_auditor as NOMBRE_AUDITOR,
+                        f1.nombre_supervisor as NOMBRE_SUPERVISOR,
+                        f1.tipo_fiscalizacion as TIPO_FISCALIZACION
+                    FROM fiscalizaciones4 f4
+                    LEFT JOIN fiscalizaciones1 f1
+                        ON TRIM(f4.num_ruc) = TRIM(f1.NUM_DOCSEL)
+                    LEFT JOIN mypes m
+                        ON TRIM(f4.num_ruc) = TRIM(m.ruc)
+                    WHERE f4.mto_saldo > 0
+                    ORDER BY f4.mto_saldo DESC;
+                """
+                df_cruce = pd.read_sql(query_cruce, DB_ENGINE)
+                control_saldo_cargado["df_completo"] = df_cruce
+                # Actualizar UI en el hilo principal
+                app.after(0, lambda: mostrar_datos_control_saldo(df_cruce))
+            except Exception as e:
+                app.after(0, lambda: mostrar_error_control_saldo(str(e)))
 
-            loading_label.destroy()
+        def mostrar_error_control_saldo(error_msg):
+            """Muestra error en la UI"""
+            try:
+                loading_label.destroy()
+            except:
+                pass
+            ctk.CTkLabel(frame_tabla_control, text=f"Error al cargar datos:\n{error_msg}",
+                        font=("Segoe UI", 12), text_color="#DC2626").pack(pady=30)
+
+        def ver_detalle_of(ruc):
+            """Muestra detalle completo de la OF para un RUC específico"""
+            df = control_saldo_cargado["df_completo"]
+            if df is None:
+                return
+
+            # Buscar el registro
+            registro = df[df['RUC'] == ruc]
+            if registro.empty:
+                messagebox.showwarning("Aviso", "No se encontró información para este RUC")
+                return
+
+            row = registro.iloc[0]
+
+            # Crear ventana de detalle
+            detalle_win = ctk.CTkToplevel(app)
+            detalle_win.title(f"👁️ Detalle OF - RUC: {ruc}")
+            detalle_win.geometry("550x480")
+            detalle_win.transient(app)
+            detalle_win.grab_set()
+
+            # Centrar ventana
+            detalle_win.update_idletasks()
+            x = (detalle_win.winfo_screenwidth() - 550) // 2
+            y = (detalle_win.winfo_screenheight() - 480) // 2
+            detalle_win.geometry(f"550x480+{x}+{y}")
+
+            # Header
+            header = ctk.CTkFrame(detalle_win, fg_color="#1E40AF", height=50)
+            header.pack(fill="x")
+            header.pack_propagate(False)
+            ctk.CTkLabel(header, text=f"👁️ DETALLE DE ORDEN DE FISCALIZACIÓN",
+                        font=("Segoe UI", 14, "bold"), text_color="white").pack(pady=12)
+
+            # Contenido
+            content = ctk.CTkScrollableFrame(detalle_win, fg_color="white")
+            content.pack(fill="both", expand=True, padx=10, pady=10)
+
+            def crear_campo(parent, label, valor, es_importante=False):
+                frame = ctk.CTkFrame(parent, fg_color="#F8FAFC" if not es_importante else "#EFF6FF")
+                frame.pack(fill="x", pady=3, padx=5)
+                ctk.CTkLabel(frame, text=label, font=("Segoe UI", 11, "bold"),
+                            text_color="#374151", width=180, anchor="w").pack(side="left", padx=10, pady=8)
+                valor_str = str(valor) if pd.notna(valor) else "-"
+                if label == "Saldo Detracciones:" and pd.notna(valor):
+                    valor_str = f"S/ {float(valor):,.2f}"
+                ctk.CTkLabel(frame, text=valor_str, font=("Segoe UI", 11),
+                            text_color="#1F2937", anchor="w").pack(side="left", fill="x", expand=True, padx=10, pady=8)
+
+            # Sección: Datos del Contribuyente
+            ctk.CTkLabel(content, text="📋 DATOS DEL CONTRIBUYENTE", font=("Segoe UI", 12, "bold"),
+                        text_color="#1E40AF").pack(anchor="w", pady=(5, 5), padx=5)
+            crear_campo(content, "RUC:", row['RUC'], True)
+            crear_campo(content, "Razón Social:", row['RAZON_SOCIAL'], True)
+            crear_campo(content, "Saldo Detracciones:", row['SALDO'], True)
+            crear_campo(content, "Padrón MYPE:", row['PADRON_MYPE'])
+
+            # Sección: Datos de la OF
+            ctk.CTkLabel(content, text="📑 DATOS DE LA ORDEN DE FISCALIZACIÓN", font=("Segoe UI", 12, "bold"),
+                        text_color="#1E40AF").pack(anchor="w", pady=(15, 5), padx=5)
+            crear_campo(content, "N° Orden Fiscalización:", row['NUM_ORDEN'], True)
+            crear_campo(content, "Descripción:", row['DESCRIPCION'])
+            crear_campo(content, "Estado:", row['ESTADO'])
+            crear_campo(content, "Año Emisión:", row['ANIO'])
+            crear_campo(content, "Tipo Fiscalización:", row['TIPO_FISCALIZACION'])
+
+            # Sección: Personal Asignado
+            ctk.CTkLabel(content, text="👥 PERSONAL ASIGNADO", font=("Segoe UI", 12, "bold"),
+                        text_color="#1E40AF").pack(anchor="w", pady=(15, 5), padx=5)
+            crear_campo(content, "Reg. Auditor:", row['REG_AUDITOR'])
+            crear_campo(content, "Nombre Auditor:", row['NOMBRE_AUDITOR'], True)
+            crear_campo(content, "Nombre Supervisor:", row['NOMBRE_SUPERVISOR'], True)
+
+            # Botón cerrar
+            ctk.CTkButton(detalle_win, text="✖️ Cerrar", command=detalle_win.destroy,
+                        fg_color="#6B7280", hover_color="#4B5563",
+                        font=("Segoe UI", 12, "bold"), width=120, height=35).pack(pady=15)
+
+        def mostrar_datos_control_saldo(df_cruce):
+            """Muestra los datos en la UI (llamado desde el hilo principal)"""
+            try:
+                loading_label.destroy()
+            except:
+                pass
 
             if df_cruce.empty:
                 ctk.CTkLabel(frame_tabla_control, text="No se encontraron datos cruzados",
                             font=("Segoe UI", 14), text_color="#666666").pack(pady=30)
                 return
+
+            control_saldo_cargado["valor"] = True
 
             # Calcular métricas
             total_registros = len(df_cruce)
@@ -14035,17 +14147,22 @@ def dashboard_control_detracciones():
             crear_card(metrics_control_container, "👥", "Contribuyentes", total_contribuyentes, "#c2e9fb", "#90cdf4")
             crear_card(metrics_control_container, "🔗", "OF Vinculados", total_of_vinculados, "#c2e9fb", "#90cdf4")
 
-            # Título de la tabla
-            ctk.CTkLabel(frame_tabla_control,
+            # Título de la tabla con instrucción
+            titulo_frame = ctk.CTkFrame(frame_tabla_control, fg_color="transparent")
+            titulo_frame.pack(fill="x", padx=12, pady=(10, 5))
+            ctk.CTkLabel(titulo_frame,
                         text="📊 CRUCE DE DATOS: SALDO DETRACCIONES - FISCALIZACIONES",
-                        font=("Segoe UI", 14, "bold"), text_color="#1E40AF").pack(anchor="w", padx=12, pady=(10, 5))
+                        font=("Segoe UI", 14, "bold"), text_color="#1E40AF").pack(side="left")
+            ctk.CTkLabel(titulo_frame,
+                        text="(Doble clic o botón 👁️ para ver detalle)",
+                        font=("Segoe UI", 10), text_color="#6B7280").pack(side="left", padx=10)
 
             # Contenedor para la tabla con scroll
             container = ctk.CTkFrame(frame_tabla_control, fg_color="white")
             container.pack(fill="both", expand=True, padx=5, pady=5)
 
-            # Columnas de la tabla
-            cols = ["RUC", "RAZON_SOCIAL", "SALDO", "NUM_ORDEN", "DESCRIPCION", "ESTADO", "ANIO", "PADRON_MYPE"]
+            # Columnas de la tabla (sin las de detalle)
+            cols = ["VER", "RUC", "RAZON_SOCIAL", "SALDO", "NUM_ORDEN", "DESCRIPCION", "ESTADO", "ANIO", "PADRON_MYPE"]
             tree = ttk.Treeview(container, columns=cols, show="headings")
 
             # Scrollbars
@@ -14062,20 +14179,21 @@ def dashboard_control_detracciones():
 
             # Configurar encabezados y anchos
             headers_config = {
+                "VER": ("👁️", 40),
                 "RUC": ("RUC", 110),
-                "RAZON_SOCIAL": ("Razón Social", 250),
-                "SALDO": ("Saldo Detracc.", 120),
-                "NUM_ORDEN": ("N° Orden FI", 120),
-                "DESCRIPCION": ("Descripción", 150),
-                "ESTADO": ("Estado", 100),
-                "ANIO": ("Año", 70),
-                "PADRON_MYPE": ("MYPE", 60)
+                "RAZON_SOCIAL": ("Razón Social", 220),
+                "SALDO": ("Saldo Detracc.", 110),
+                "NUM_ORDEN": ("N° Orden FI", 110),
+                "DESCRIPCION": ("Descripción", 140),
+                "ESTADO": ("Estado", 90),
+                "ANIO": ("Año", 60),
+                "PADRON_MYPE": ("MYPE", 50)
             }
 
             for col in cols:
                 header_text, width = headers_config.get(col, (col, 100))
                 tree.heading(col, text=header_text)
-                tree.column(col, width=width, minwidth=50)
+                tree.column(col, width=width, minwidth=40)
 
             # Estilos para el Treeview
             style = ttk.Style()
@@ -14085,12 +14203,11 @@ def dashboard_control_detracciones():
             # Tags para colores
             tree.tag_configure("vinculado", background="#ECFDF5")  # Verde claro para vinculados
             tree.tag_configure("no_vinculado", background="#FEF3C7")  # Amarillo para no vinculados
-            tree.tag_configure("mype_si", background="#DBEAFE")  # Azul claro para MYPE
 
             # Insertar datos
             for idx, row in df_cruce.iterrows():
-                valores = []
-                for col in cols:
+                valores = ["👁️"]  # Columna para ver detalle
+                for col in cols[1:]:  # Saltar la primera columna VER
                     val = row[col]
                     if col == "SALDO":
                         val = f"S/ {float(val):,.2f}" if pd.notna(val) else "S/ 0.00"
@@ -14106,6 +14223,29 @@ def dashboard_control_detracciones():
 
                 tree.insert("", "end", values=valores, tags=(tag,))
 
+            # Evento doble clic para ver detalle
+            def on_double_click(event):
+                item = tree.selection()
+                if item:
+                    valores = tree.item(item[0], 'values')
+                    ruc = valores[1]  # RUC está en la segunda posición
+                    ver_detalle_of(ruc)
+
+            # Evento clic en columna VER
+            def on_single_click(event):
+                region = tree.identify("region", event.x, event.y)
+                if region == "cell":
+                    column = tree.identify_column(event.x)
+                    if column == "#1":  # Primera columna (VER)
+                        item = tree.identify_row(event.y)
+                        if item:
+                            valores = tree.item(item, 'values')
+                            ruc = valores[1]
+                            ver_detalle_of(ruc)
+
+            tree.bind("<Double-1>", on_double_click)
+            tree.bind("<Button-1>", on_single_click)
+
             # Función para exportar
             def exportar_control_saldo():
                 from tkinter import filedialog
@@ -14115,15 +14255,25 @@ def dashboard_control_detracciones():
                     title="Guardar cruce de datos"
                 )
                 if filename:
-                    # Crear DataFrame para exportar con formato
+                    # Crear DataFrame para exportar con formato (incluye columnas de detalle)
                     df_export = df_cruce.copy()
                     df_export['SALDO'] = df_export['SALDO'].apply(lambda x: f"S/ {x:,.2f}" if pd.notna(x) else "S/ 0.00")
                     df_export.to_excel(filename, index=False)
                     messagebox.showinfo("Éxito", f"Datos exportados a:\n{filename}")
 
+            # Función para recargar datos
+            def recargar_control_saldo():
+                control_saldo_cargado["valor"] = False
+                control_saldo_cargado["df_completo"] = None
+                cargar_datos_control_saldo()
+
             # Frame para botones
             btn_frame = ctk.CTkFrame(frame_tabla_control, fg_color="transparent")
             btn_frame.pack(fill="x", pady=10, padx=10)
+
+            ctk.CTkButton(btn_frame, text="🔄 Recargar", command=recargar_control_saldo,
+                        fg_color="#3B82F6", hover_color="#2563EB",
+                        font=("Segoe UI", 11, "bold"), width=120, height=35).pack(side="left", padx=5)
 
             ctk.CTkButton(btn_frame, text="📥 Exportar a Excel", command=exportar_control_saldo,
                         fg_color="#10B981", hover_color="#059669",
@@ -14138,13 +14288,8 @@ def dashboard_control_detracciones():
             ctk.CTkLabel(leyenda_frame, text="🟡 Sin OF vinculado", font=("Segoe UI", 9),
                         text_color="#D97706").pack(side="left", padx=10)
 
-        except Exception as e:
-            try:
-                loading_label.destroy()
-            except:
-                pass
-            ctk.CTkLabel(frame_tabla_control, text=f"Error al cargar datos:\n{str(e)}",
-                        font=("Segoe UI", 12), text_color="#DC2626").pack(pady=30)
+        # Iniciar carga en hilo separado
+        threading.Thread(target=cargar_en_hilo, daemon=True).start()
 
     # Asignar referencias a widgets_tabs
     widgets_tabs["contenido_control"] = contenido_control_saldo_frame
