@@ -13900,11 +13900,9 @@ def dashboard_control_detracciones():
             query_cruce = """
                 SELECT
                     f4.num_ruc,
-                    f4.razon_social,
                     f4.mto_saldo,
-                    f4.fec_apertura,
                     f1.NUM_ORD_FI,
-                    f1.DDP_NOMBRE,
+                    f1.DDP_NOMBRE as razon_social,
                     f1.des_func,
                     f1.Estado as estado_of,
                     f1.Anio_Emis,
