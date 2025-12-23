@@ -13036,25 +13036,39 @@ def dashboard_control_detracciones():
     # Variable para rastrear la pestaña activa
     active_tab = {"current": "OF"}
 
+    # Referencias para widgets que se definirán después
+    widgets_tabs = {"btn_control": None, "contenido_control": None, "cargar_control": None}
+
     # Función para cambiar de pestaña
     def cambiar_tab(tab_name):
         active_tab["current"] = tab_name
-        
-        # Actualizar colores de botones
+
+        # Resetear colores de todos los botones
+        btn_tab_of.configure(fg_color="#6B7280", hover_color="#4B5563")
+        btn_tab_ai.configure(fg_color="#6B7280", hover_color="#4B5563")
+        if widgets_tabs["btn_control"]:
+            widgets_tabs["btn_control"].configure(fg_color="#6B7280", hover_color="#4B5563")
+
+        # Ocultar todos los contenidos
+        contenido_of_frame.pack_forget()
+        contenido_ai_frame.pack_forget()
+        if widgets_tabs["contenido_control"]:
+            widgets_tabs["contenido_control"].pack_forget()
+
+        # Actualizar colores y mostrar contenido según pestaña
         if tab_name == "OF":
             btn_tab_of.configure(fg_color="#a51c30", hover_color="#8b1629")
-            btn_tab_ai.configure(fg_color="#6B7280", hover_color="#4B5563")
-            
-            # Mostrar contenido OF, ocultar AI
             contenido_of_frame.pack(fill="both", expand=True, pady=(0, 10))
-            contenido_ai_frame.pack_forget()
-        else:  # AI
+        elif tab_name == "AI":
             btn_tab_ai.configure(fg_color="#a51c30", hover_color="#8b1629")
-            btn_tab_of.configure(fg_color="#6B7280", hover_color="#4B5563")
-            
-            # Mostrar contenido AI, ocultar OF
             contenido_ai_frame.pack(fill="both", expand=True, pady=(0, 10))
-            contenido_of_frame.pack_forget()
+        elif tab_name == "CONTROL_SALDO":
+            if widgets_tabs["btn_control"]:
+                widgets_tabs["btn_control"].configure(fg_color="#059669", hover_color="#047857")
+            if widgets_tabs["contenido_control"]:
+                widgets_tabs["contenido_control"].pack(fill="both", expand=True, pady=(0, 10))
+            if widgets_tabs["cargar_control"]:
+                widgets_tabs["cargar_control"]()
 
     # Botones de pestañas
     btn_tab_of = ctk.CTkButton(
@@ -13080,6 +13094,80 @@ def dashboard_control_detracciones():
         height=40
     )
     btn_tab_ai.pack(side="left", padx=5)
+
+    # Variable para controlar acceso a Control de saldo
+    control_saldo_autenticado = {"valor": False}
+
+    def solicitar_contrasena_control_saldo():
+        """Solicita contraseña para acceder a Control de saldo"""
+        if control_saldo_autenticado["valor"]:
+            # Ya autenticado, ir directamente
+            cambiar_tab("CONTROL_SALDO")
+            return
+
+        # Crear ventana de contraseña
+        dialog = ctk.CTkToplevel(app)
+        dialog.title("🔐 Acceso Restringido")
+        dialog.geometry("350x200")
+        dialog.transient(app)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+
+        # Centrar
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - 175
+        y = (dialog.winfo_screenheight() // 2) - 100
+        dialog.geometry(f"350x200+{x}+{y}")
+
+        frame_dialog = ctk.CTkFrame(dialog, fg_color="#F5F5F5")
+        frame_dialog.pack(fill="both", expand=True, padx=15, pady=15)
+
+        ctk.CTkLabel(frame_dialog, text="🔐 Control de Saldo",
+                    font=("Segoe UI", 16, "bold"), text_color="#1E40AF").pack(pady=(10, 5))
+        ctk.CTkLabel(frame_dialog, text="Ingrese la contraseña para acceder:",
+                    font=("Segoe UI", 11), text_color="#666666").pack(pady=(0, 10))
+
+        password_var = tk.StringVar()
+        entry_password = ctk.CTkEntry(frame_dialog, textvariable=password_var,
+                                     show="*", width=200, height=35,
+                                     font=("Segoe UI", 12))
+        entry_password.pack(pady=5)
+        entry_password.focus()
+
+        def verificar_password():
+            if password_var.get() == "1234":
+                control_saldo_autenticado["valor"] = True
+                dialog.destroy()
+                cambiar_tab("CONTROL_SALDO")
+            else:
+                messagebox.showerror("Error", "Contraseña incorrecta", parent=dialog)
+                password_var.set("")
+                entry_password.focus()
+
+        entry_password.bind("<Return>", lambda e: verificar_password())
+
+        btn_frame = ctk.CTkFrame(frame_dialog, fg_color="transparent")
+        btn_frame.pack(pady=15)
+
+        ctk.CTkButton(btn_frame, text="❌ Cancelar", command=dialog.destroy,
+                     fg_color="#6B7280", hover_color="#4B5563",
+                     width=100, height=32).pack(side="left", padx=5)
+        ctk.CTkButton(btn_frame, text="✅ Acceder", command=verificar_password,
+                     fg_color="#059669", hover_color="#047857",
+                     width=100, height=32).pack(side="left", padx=5)
+
+    btn_tab_control = ctk.CTkButton(
+        tabs_frame,
+        text="🔐 CONTROL DE SALDO",
+        command=solicitar_contrasena_control_saldo,
+        fg_color="#6B7280",
+        hover_color="#4B5563",
+        font=("Segoe UI", 13, "bold"),
+        width=250,
+        height=40
+    )
+    btn_tab_control.pack(side="left", padx=5)
+    widgets_tabs["btn_control"] = btn_tab_control
 
     # ====================
     # CONTENIDO PARA OF
@@ -13178,8 +13266,8 @@ def dashboard_control_detracciones():
             total_contribuyentes = 0
 
         crear_card(metrics_of_container, "📊", "Total OF Pendientes", total_of, "#c2e9fb", "#90cdf4")
-        crear_card(metrics_of_container, "💰", "Saldo Total", saldo_formateado, "#ffd6a5", "#ffb347")
-        crear_card(metrics_of_container, "👥", "Contribuyentes", total_contribuyentes, "#d4a5f9", "#b784f2")
+        crear_card(metrics_of_container, "💰", "Saldo Total", saldo_formateado, "#c2e9fb", "#90cdf4")
+        crear_card(metrics_of_container, "👥", "Contribuyentes", total_contribuyentes, "#c2e9fb", "#90cdf4")
 
     recalcular_metricas_of()
 
@@ -13482,8 +13570,8 @@ def dashboard_control_detracciones():
             total_contribuyentes = 0
 
         crear_card(metrics_ai_container, "🎯", "Total AI Pendientes", total_ai, "#c2e9fb", "#90cdf4")
-        crear_card(metrics_ai_container, "💰", "Saldo Total", saldo_formateado, "#ffd6a5", "#ffb347")
-        crear_card(metrics_ai_container, "👥", "Contribuyentes", total_contribuyentes, "#d4a5f9", "#b784f2")
+        crear_card(metrics_ai_container, "💰", "Saldo Total", saldo_formateado, "#c2e9fb", "#90cdf4")
+        crear_card(metrics_ai_container, "👥", "Contribuyentes", total_contribuyentes, "#c2e9fb", "#90cdf4")
 
     recalcular_metricas_ai()
 
@@ -13778,6 +13866,176 @@ def dashboard_control_detracciones():
         generar_tabla_control_saldo_detracciones_ai(frame_tabla_ai)
     except Exception as e:
         messagebox.showerror("Error", f"No se pudo generar la tabla AI:\n{e}")
+
+    # ====================
+    # CONTENIDO PARA CONTROL DE SALDO (CRUCE DE DATOS)
+    # ====================
+    contenido_control_saldo_frame = ctk.CTkFrame(inner_frame, fg_color="transparent")
+
+    # Métricas Control de Saldo
+    metrics_control_container = ctk.CTkFrame(contenido_control_saldo_frame, fg_color=COLOR_WHITE)
+    metrics_control_container.pack(pady=(4, 3), padx=15, fill="x")
+
+    # Frame para la tabla
+    frame_tabla_control = ctk.CTkFrame(contenido_control_saldo_frame, fg_color="white", corner_radius=12)
+    frame_tabla_control.pack(pady=(5, 10), padx=12, fill="both", expand=True)
+
+    def cargar_datos_control_saldo():
+        """Carga los datos cruzados de fiscalizaciones1 y fiscalizaciones4"""
+        # Limpiar contenedores
+        for widget in metrics_control_container.winfo_children():
+            widget.destroy()
+        for widget in frame_tabla_control.winfo_children():
+            widget.destroy()
+
+        # Mostrar indicador de carga
+        loading_label = ctk.CTkLabel(frame_tabla_control, text="⏳ Cargando datos cruzados...",
+                                    font=("Segoe UI", 14, "bold"), text_color="#1E40AF")
+        loading_label.pack(pady=50)
+        frame_tabla_control.update()
+
+        try:
+            # Query para cruzar fiscalizaciones1 con fiscalizaciones4
+            # Obtiene todos los registros de fiscalizaciones4 y cruza con fiscalizaciones1 usando NUM_DOCSEL = num_ruc
+            query_cruce = """
+                SELECT
+                    f4.num_ruc,
+                    f4.razon_social,
+                    f4.mto_saldo,
+                    f4.fec_apertura,
+                    f1.NUM_ORD_FI,
+                    f1.DDP_NOMBRE,
+                    f1.des_func,
+                    f1.Estado as estado_of,
+                    f1.Anio_Emis,
+                    f1.des_cod
+                FROM fiscalizaciones4 f4
+                LEFT JOIN fiscalizaciones1 f1
+                    ON TRIM(f4.num_ruc) = TRIM(f1.NUM_DOCSEL)
+                WHERE f4.mto_saldo > 0
+                ORDER BY f4.mto_saldo DESC;
+            """
+            df_cruce = pd.read_sql(query_cruce, DB_ENGINE)
+
+            loading_label.destroy()
+
+            if df_cruce.empty:
+                ctk.CTkLabel(frame_tabla_control, text="No se encontraron datos cruzados",
+                            font=("Segoe UI", 14), text_color="#666666").pack(pady=30)
+                return
+
+            # Calcular métricas
+            total_registros = len(df_cruce)
+            total_saldo = df_cruce['mto_saldo'].sum()
+            total_contribuyentes = df_cruce['num_ruc'].nunique()
+            total_of_vinculados = df_cruce['NUM_ORD_FI'].notna().sum()
+
+            # Crear cards de métricas
+            crear_card(metrics_control_container, "📋", "Total Registros", total_registros, "#c2e9fb", "#90cdf4")
+            crear_card(metrics_control_container, "💰", "Saldo Total", f"S/ {total_saldo:,.2f}", "#c2e9fb", "#90cdf4")
+            crear_card(metrics_control_container, "👥", "Contribuyentes", total_contribuyentes, "#c2e9fb", "#90cdf4")
+            crear_card(metrics_control_container, "🔗", "OF Vinculados", total_of_vinculados, "#c2e9fb", "#90cdf4")
+
+            # Título de la tabla
+            ctk.CTkLabel(frame_tabla_control,
+                        text="📊 CRUCE DE DATOS: FISCALIZACIONES - SALDO DETRACCIONES",
+                        font=("Segoe UI", 14, "bold"), text_color="#1E40AF").pack(pady=(10, 5))
+
+            # Canvas con scroll para la tabla
+            canvas_control = tk.Canvas(frame_tabla_control, bg="white", highlightthickness=0, height=400)
+            scrollbar_y = ctk.CTkScrollbar(frame_tabla_control, orientation="vertical", command=canvas_control.yview)
+            scrollbar_x = ttk.Scrollbar(frame_tabla_control, orient="horizontal", command=canvas_control.xview)
+            canvas_control.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+
+            frame_tabla_inner = ctk.CTkFrame(canvas_control, fg_color="white")
+            canvas_window_ctrl = canvas_control.create_window((0, 0), window=frame_tabla_inner, anchor="nw")
+
+            def on_configure_ctrl(event=None):
+                canvas_control.configure(scrollregion=canvas_control.bbox("all"))
+
+            frame_tabla_inner.bind("<Configure>", on_configure_ctrl)
+
+            scrollbar_y.pack(side="right", fill="y")
+            scrollbar_x.pack(side="bottom", fill="x")
+            canvas_control.pack(side="left", fill="both", expand=True, padx=5, pady=5)
+
+            # Encabezados de tabla
+            headers = ["RUC", "Razón Social", "Saldo", "N° Orden", "Auditor", "Estado", "Año"]
+            widths = [120, 250, 120, 120, 180, 100, 80]
+
+            header_frame = ctk.CTkFrame(frame_tabla_inner, fg_color="#1E40AF", height=40)
+            header_frame.pack(fill="x")
+            header_frame.pack_propagate(False)
+
+            for i, (header, width) in enumerate(zip(headers, widths)):
+                ctk.CTkLabel(header_frame, text=header, font=("Segoe UI", 11, "bold"),
+                            text_color="white", width=width).pack(side="left", padx=2)
+
+            # Filas de datos
+            for idx, row in df_cruce.head(500).iterrows():  # Limitar a 500 filas
+                bg_color = "#F8FAFC" if idx % 2 == 0 else "#FFFFFF"
+
+                # Resaltar filas con OF vinculado
+                if pd.notna(row['NUM_ORD_FI']):
+                    bg_color = "#ECFDF5"  # Verde claro para vinculados
+
+                row_frame = ctk.CTkFrame(frame_tabla_inner, fg_color=bg_color, height=35)
+                row_frame.pack(fill="x")
+                row_frame.pack_propagate(False)
+
+                # RUC
+                ctk.CTkLabel(row_frame, text=str(row['num_ruc'] or ""),
+                            font=("Segoe UI", 10), text_color="#333", width=120).pack(side="left", padx=2)
+                # Razón Social
+                razon = str(row['razon_social'] or "")[:35]
+                ctk.CTkLabel(row_frame, text=razon,
+                            font=("Segoe UI", 10), text_color="#333", width=250, anchor="w").pack(side="left", padx=2)
+                # Saldo
+                saldo = float(row['mto_saldo']) if pd.notna(row['mto_saldo']) else 0
+                ctk.CTkLabel(row_frame, text=f"S/ {saldo:,.2f}",
+                            font=("Segoe UI", 10, "bold"), text_color="#059669", width=120).pack(side="left", padx=2)
+                # N° Orden
+                num_ord = str(row['NUM_ORD_FI']) if pd.notna(row['NUM_ORD_FI']) else "-"
+                ctk.CTkLabel(row_frame, text=num_ord,
+                            font=("Segoe UI", 10), text_color="#333", width=120).pack(side="left", padx=2)
+                # Auditor
+                auditor = str(row['des_func'] or "-")[:25]
+                ctk.CTkLabel(row_frame, text=auditor,
+                            font=("Segoe UI", 10), text_color="#333", width=180, anchor="w").pack(side="left", padx=2)
+                # Estado
+                estado = str(row['estado_of'] or "-")
+                color_estado = "#059669" if estado.lower() == "terminado" else "#F59E0B" if estado.lower() == "pendiente" else "#666"
+                ctk.CTkLabel(row_frame, text=estado,
+                            font=("Segoe UI", 10), text_color=color_estado, width=100).pack(side="left", padx=2)
+                # Año
+                anio = str(row['Anio_Emis'] or "-")
+                ctk.CTkLabel(row_frame, text=anio,
+                            font=("Segoe UI", 10), text_color="#333", width=80).pack(side="left", padx=2)
+
+            # Botón exportar
+            def exportar_control_saldo():
+                from tkinter import filedialog
+                filename = filedialog.asksaveasfilename(
+                    defaultextension=".xlsx",
+                    filetypes=[("Excel files", "*.xlsx")],
+                    title="Guardar cruce de datos"
+                )
+                if filename:
+                    df_cruce.to_excel(filename, index=False)
+                    messagebox.showinfo("Éxito", f"Datos exportados a:\n{filename}")
+
+            ctk.CTkButton(frame_tabla_control, text="📥 Exportar a Excel", command=exportar_control_saldo,
+                        fg_color="#10B981", hover_color="#059669",
+                        font=("Segoe UI", 11, "bold"), width=160, height=35).pack(pady=10)
+
+        except Exception as e:
+            loading_label.destroy()
+            ctk.CTkLabel(frame_tabla_control, text=f"Error al cargar datos:\n{str(e)}",
+                        font=("Segoe UI", 12), text_color="#DC2626").pack(pady=30)
+
+    # Asignar referencias a widgets_tabs
+    widgets_tabs["contenido_control"] = contenido_control_saldo_frame
+    widgets_tabs["cargar_control"] = cargar_datos_control_saldo
 
     # ====================
     # MOSTRAR CONTENIDO INICIAL (OF)
