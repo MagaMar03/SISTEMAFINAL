@@ -14072,102 +14072,240 @@ def dashboard_control_detracciones():
                         font=("Segoe UI", 12), text_color="#DC2626").pack(pady=30)
 
         def ver_detalle(tipo, numero):
-            """Muestra detalle completo de la OF o AI"""
-            df = control_saldo_cargado["df_completo"]
-            if df is None:
-                return
+            """Muestra detalle completo con TODAS las columnas de las tablas"""
+            try:
+                if tipo == "OF":
+                    # Consulta para obtener TODOS los datos de fiscalizaciones1 + fiscalizaciones4
+                    query_detalle = f"""
+                        SELECT
+                            'OF' as TIPO,
+                            f1.*,
+                            f4.num_ruc as F4_NUM_RUC,
+                            f4.nom_ruc as F4_NOM_RUC,
+                            f4.num_cargos as F4_NUM_CARGOS,
+                            f4.mto_cargos as F4_MTO_CARGOS,
+                            f4.num_abonos as F4_NUM_ABONOS,
+                            f4.mto_abonos as F4_MTO_ABONOS,
+                            f4.ind_signo as F4_IND_SIGNO,
+                            f4.mto_saldo as F4_MTO_SALDO,
+                            CASE WHEN m.ruc IS NOT NULL THEN 'SI' ELSE 'NO' END as PADRON_MYPE
+                        FROM fiscalizaciones1 f1
+                        INNER JOIN fiscalizaciones4 f4 ON TRIM(f1.NUM_DOCSEL) = TRIM(f4.num_ruc)
+                        LEFT JOIN mypes m ON TRIM(f1.NUM_DOCSEL) = TRIM(m.ruc)
+                        WHERE f1.NUM_ORD_FI = '{numero}'
+                        LIMIT 1;
+                    """
+                else:  # AI
+                    # Consulta para obtener TODOS los datos de fiscalizaciones3 + fiscalizaciones4
+                    query_detalle = f"""
+                        SELECT
+                            'AI' as TIPO,
+                            f3.*,
+                            f4.num_ruc as F4_NUM_RUC,
+                            f4.nom_ruc as F4_NOM_RUC,
+                            f4.num_cargos as F4_NUM_CARGOS,
+                            f4.mto_cargos as F4_MTO_CARGOS,
+                            f4.num_abonos as F4_NUM_ABONOS,
+                            f4.mto_abonos as F4_MTO_ABONOS,
+                            f4.ind_signo as F4_IND_SIGNO,
+                            f4.mto_saldo as F4_MTO_SALDO,
+                            CASE WHEN m.ruc IS NOT NULL THEN 'SI' ELSE 'NO' END as PADRON_MYPE
+                        FROM fiscalizaciones3 f3
+                        INNER JOIN fiscalizaciones4 f4 ON TRIM(f3.NUM_DOCSEL) = TRIM(f4.num_ruc)
+                        LEFT JOIN mypes m ON TRIM(f3.NUM_DOCSEL) = TRIM(m.ruc)
+                        WHERE f3.NUM_ACC_IN = '{numero}'
+                        LIMIT 1;
+                    """
 
-            # Buscar el registro
-            registro = df[(df['TIPO'] == tipo) & (df['NUMERO'] == numero)]
-            if registro.empty:
-                messagebox.showwarning("Aviso", f"No se encontró información para este registro")
-                return
+                df_detalle = pd.read_sql(query_detalle, DB_ENGINE)
 
-            row = registro.iloc[0]
+                if df_detalle.empty:
+                    messagebox.showwarning("Aviso", f"No se encontró información para este registro")
+                    return
 
-            # Crear ventana de detalle
-            detalle_win = ctk.CTkToplevel(app)
-            titulo_tipo = "ORDEN DE FISCALIZACIÓN" if tipo == "OF" else "ACCIÓN INDUCTIVA"
-            detalle_win.title(f"👁️ Detalle {tipo} - {numero}")
-            detalle_win.geometry("600x520")
-            detalle_win.transient(app)
-            detalle_win.grab_set()
+                row = df_detalle.iloc[0]
 
-            # Centrar ventana
-            detalle_win.update_idletasks()
-            x = (detalle_win.winfo_screenwidth() - 600) // 2
-            y = (detalle_win.winfo_screenheight() - 520) // 2
-            detalle_win.geometry(f"600x520+{x}+{y}")
+                # Crear ventana de detalle más grande
+                detalle_win = ctk.CTkToplevel(app)
+                titulo_tipo = "ORDEN DE FISCALIZACIÓN" if tipo == "OF" else "ACCIÓN INDUCTIVA"
+                detalle_win.title(f"👁️ Detalle Completo {tipo} - {numero}")
+                detalle_win.geometry("900x700")
+                detalle_win.transient(app)
+                detalle_win.grab_set()
 
-            # Header con color según tipo
-            color_header = "#1E40AF" if tipo == "OF" else "#a51c30"
-            header = ctk.CTkFrame(detalle_win, fg_color=color_header, height=50)
-            header.pack(fill="x")
-            header.pack_propagate(False)
-            ctk.CTkLabel(header, text=f"👁️ DETALLE DE {titulo_tipo}",
-                        font=("Segoe UI", 14, "bold"), text_color="white").pack(pady=12)
+                # Centrar ventana
+                detalle_win.update_idletasks()
+                x = (detalle_win.winfo_screenwidth() - 900) // 2
+                y = (detalle_win.winfo_screenheight() - 700) // 2
+                detalle_win.geometry(f"900x700+{x}+{y}")
 
-            # Contenido
-            content = ctk.CTkScrollableFrame(detalle_win, fg_color="white")
-            content.pack(fill="both", expand=True, padx=10, pady=10)
+                # Header con color según tipo
+                color_header = "#1E40AF" if tipo == "OF" else "#a51c30"
+                header = ctk.CTkFrame(detalle_win, fg_color=color_header, height=50)
+                header.pack(fill="x")
+                header.pack_propagate(False)
+                ctk.CTkLabel(header, text=f"👁️ DETALLE COMPLETO DE {titulo_tipo}",
+                            font=("Segoe UI", 14, "bold"), text_color="white").pack(pady=12)
 
-            def crear_campo(parent, label, valor, es_importante=False):
-                frame = ctk.CTkFrame(parent, fg_color="#F8FAFC" if not es_importante else "#EFF6FF")
-                frame.pack(fill="x", pady=3, padx=5)
-                ctk.CTkLabel(frame, text=label, font=("Segoe UI", 11, "bold"),
-                            text_color="#374151", width=180, anchor="w").pack(side="left", padx=10, pady=8)
-                valor_str = str(valor) if pd.notna(valor) else "-"
-                if "Saldo" in label and pd.notna(valor):
-                    try:
-                        valor_str = f"S/ {float(valor):,.2f}"
-                    except:
-                        pass
-                ctk.CTkLabel(frame, text=valor_str, font=("Segoe UI", 11),
-                            text_color="#1F2937", anchor="w").pack(side="left", fill="x", expand=True, padx=10, pady=8)
+                # Contenido con scroll
+                content = ctk.CTkScrollableFrame(detalle_win, fg_color="white")
+                content.pack(fill="both", expand=True, padx=10, pady=10)
 
-            # Sección: Tipo
-            tipo_label = "📋 ORDEN DE FISCALIZACIÓN (OF)" if tipo == "OF" else "🎯 ACCIÓN INDUCTIVA (AI)"
-            ctk.CTkLabel(content, text=tipo_label, font=("Segoe UI", 12, "bold"),
-                        text_color=color_header).pack(anchor="w", pady=(5, 5), padx=5)
+                def crear_campo(parent, label, valor, es_importante=False):
+                    frame = ctk.CTkFrame(parent, fg_color="#F8FAFC" if not es_importante else "#EFF6FF")
+                    frame.pack(fill="x", pady=2, padx=5)
+                    ctk.CTkLabel(frame, text=label, font=("Segoe UI", 10, "bold"),
+                                text_color="#374151", width=200, anchor="w").pack(side="left", padx=8, pady=5)
+                    valor_str = str(valor) if pd.notna(valor) else "-"
+                    # Formatear montos
+                    if any(x in label.upper() for x in ['MTO_', 'SALDO', 'MONTO', 'PAGO', 'RENDIMIENTO']) and pd.notna(valor):
+                        try:
+                            valor_str = f"S/ {float(valor):,.2f}"
+                        except:
+                            pass
+                    ctk.CTkLabel(frame, text=valor_str, font=("Segoe UI", 10),
+                                text_color="#1F2937", anchor="w", wraplength=500).pack(side="left", fill="x", expand=True, padx=8, pady=5)
 
-            # Sección: Datos del Contribuyente
-            ctk.CTkLabel(content, text="📋 DATOS DEL CONTRIBUYENTE", font=("Segoe UI", 12, "bold"),
-                        text_color="#1E40AF").pack(anchor="w", pady=(10, 5), padx=5)
-            crear_campo(content, "RUC (NUM_DOCSEL):", row['NUM_DOCSEL'], True)
-            crear_campo(content, "Razón Social:", row['RAZON_SOCIAL'], True)
-            crear_campo(content, "Saldo Detracciones:", row['mto_saldo'], True)
-            crear_campo(content, "Padrón MYPE:", row['PADRON_MYPE'])
+                def crear_seccion(parent, titulo, color="#1E40AF"):
+                    ctk.CTkLabel(parent, text=titulo, font=("Segoe UI", 12, "bold"),
+                                text_color=color).pack(anchor="w", pady=(15, 5), padx=5)
 
-            # Sección: Datos de la OF/AI
-            seccion_titulo = "📑 DATOS DE LA OF" if tipo == "OF" else "📑 DATOS DE LA AI"
-            ctk.CTkLabel(content, text=seccion_titulo, font=("Segoe UI", 12, "bold"),
-                        text_color="#1E40AF").pack(anchor="w", pady=(15, 5), padx=5)
+                # === SECCIÓN: TIPO ===
+                tipo_label = "📋 ORDEN DE FISCALIZACIÓN (OF)" if tipo == "OF" else "🎯 ACCIÓN INDUCTIVA (AI)"
+                ctk.CTkLabel(content, text=tipo_label, font=("Segoe UI", 14, "bold"),
+                            text_color=color_header).pack(anchor="w", pady=(5, 10), padx=5)
 
-            numero_label = "N° Orden Fiscalización:" if tipo == "OF" else "N° Acción Inductiva:"
-            crear_campo(content, numero_label, row['NUMERO'], True)
-            crear_campo(content, "Descripción:", row['DESCRIPCION'])
-            crear_campo(content, "Estado:", row['Estado'])
-            crear_campo(content, "Año Emisión:", row['Anio_Emis'])
+                # Definir campos según tipo
+                if tipo == "OF":
+                    # === DATOS PRINCIPALES OF ===
+                    crear_seccion(content, "📋 DATOS DE IDENTIFICACIÓN")
+                    campos_id = ['NUM_ORD_FI', 'NUM_DOCSEL', 'DDP_NOMBRE', 'PADRON_MYPE']
+                    for campo in campos_id:
+                        if campo in row.index:
+                            crear_campo(content, f"{campo}:", row[campo], True)
 
-            if tipo == "OF" and pd.notna(row['tipo_fiscalizacion']):
-                crear_campo(content, "Tipo Fiscalización:", row['tipo_fiscalizacion'])
+                    # === DATOS DE LA OF ===
+                    crear_seccion(content, "📑 DATOS DE LA ORDEN DE FISCALIZACIÓN")
+                    campos_of = ['COD_PROGFI', 'COD_TIPACT', 'COD_GRP_TR', 'COD_METODO', 'des_cod',
+                                'Tipo_Fiscalizacion', 'Des_eta_of', 'des_est_of', 'Estado',
+                                'Anio_Emis', 'Mes_Emis', 'Anio_Termino', 'Mes_termino']
+                    for campo in campos_of:
+                        if campo in row.index:
+                            crear_campo(content, f"{campo}:", row[campo])
 
-            # Sección: Personal Asignado
-            ctk.CTkLabel(content, text="👥 PERSONAL ASIGNADO", font=("Segoe UI", 12, "bold"),
-                        text_color="#1E40AF").pack(anchor="w", pady=(15, 5), padx=5)
+                    # === FECHAS ===
+                    crear_seccion(content, "📅 FECHAS")
+                    campos_fechas = ['FEC_EMISIO', 'FEC_NOTIFI', 'FEC_TERMIN', 'FEC_VENC',
+                                    'Fec_ini_ult_req', 'Ult_requerimiento']
+                    for campo in campos_fechas:
+                        if campo in row.index:
+                            crear_campo(content, f"{campo}:", row[campo])
 
-            if tipo == "OF" and pd.notna(row['reg_auditor']):
-                crear_campo(content, "Reg. Auditor:", row['reg_auditor'])
+                    # === MONTOS ===
+                    crear_seccion(content, "💰 MONTOS Y VALORES")
+                    campos_montos = ['MTO_PAG_IN', 'MTO_PAG_RE', 'MTO_VAL_DE', 'MTO_VAL_CR',
+                                    'Rendimiento_dia', 'Rendimiento_OF']
+                    for campo in campos_montos:
+                        if campo in row.index:
+                            crear_campo(content, f"{campo}:", row[campo], True)
 
-            auditor_label = "Nombre Auditor:" if tipo == "OF" else "Verificador:"
-            supervisor_label = "Nombre Supervisor:" if tipo == "OF" else "Supervisor:"
-            crear_campo(content, auditor_label, row['AUDITOR'], True)
-            crear_campo(content, supervisor_label, row['SUPERVISOR'], True)
+                    # === DÍAS ===
+                    crear_seccion(content, "⏱️ DÍAS Y PLAZOS")
+                    campos_dias = ['dias_asignados', 'dias_empleados', 'Exceso', 'Resultado_dias', 'Dias_ult_req']
+                    for campo in campos_dias:
+                        if campo in row.index:
+                            crear_campo(content, f"{campo}:", row[campo])
 
-            # Botón cerrar
-            ctk.CTkButton(detalle_win, text="✖️ Cerrar", command=detalle_win.destroy,
-                        fg_color="#6B7280", hover_color="#4B5563",
-                        font=("Segoe UI", 12, "bold"), width=120, height=35).pack(pady=15)
+                    # === PERSONAL ===
+                    crear_seccion(content, "👥 PERSONAL ASIGNADO")
+                    campos_personal = ['REG_AUDITOR', 'NOMBRE_AUDITOR', 'Categoria_Auditor',
+                                      'REG_SUPERVISOR', 'NOMBRE_SUPERVISOR']
+                    for campo in campos_personal:
+                        if campo in row.index:
+                            crear_campo(content, f"{campo}:", row[campo], True)
+
+                    # === OTROS DATOS ===
+                    crear_seccion(content, "📊 OTROS DATOS")
+                    campos_otros = ['COD_REG_ES', 'NUM_CARGA', 'SISCOR', 'REQUERIMIENTO_INICIAL',
+                                   'Periodos_Revisados', 'Denuncia', 'Centralizada', 'Cant_AF_ESSALUD',
+                                   'MTG', 'Exp_Electronico', 'SIP_05', 'MTO_SIP_05', 'Monto_Comp2_SIP05',
+                                   'Porc_Rend_Incons_SIP05', 'Porc_PARTIC_MTO_RIESGO', 'Stock_AUD_25',
+                                   'Componente_PNC_R12_2024', 'Monto_PNC_R12_2024', 'Stock_AUD_25_Tot']
+                    for campo in campos_otros:
+                        if campo in row.index and pd.notna(row[campo]):
+                            crear_campo(content, f"{campo}:", row[campo])
+
+                else:  # AI
+                    # === DATOS PRINCIPALES AI ===
+                    crear_seccion(content, "📋 DATOS DE IDENTIFICACIÓN")
+                    campos_id = ['NUM_ACC_IN', 'NUM_DOCSEL', 'F4_NOM_RUC', 'PADRON_MYPE']
+                    for campo in campos_id:
+                        if campo in row.index:
+                            crear_campo(content, f"{campo}:", row[campo], True)
+
+                    # === DATOS DE LA AI ===
+                    crear_seccion(content, "🎯 DATOS DE LA ACCIÓN INDUCTIVA")
+                    campos_ai = ['COD_ACC_IN', 'COD_PROGFI', 'COD_GRP_TR', 'COD_METODO',
+                                'DES_TIPO_AI', 'DES_NOMB_PROG', 'IND_EST_AC', 'IND_EST_RE',
+                                'Estado', 'Anio_Emis', 'Mes_Emis', 'Anio_Termino', 'Mes_termino']
+                    for campo in campos_ai:
+                        if campo in row.index:
+                            crear_campo(content, f"{campo}:", row[campo])
+
+                    # === FECHAS ===
+                    crear_seccion(content, "📅 FECHAS")
+                    campos_fechas = ['FEC_GEN', 'FEC_NOT', 'FEC_TER', 'Fec_limite']
+                    for campo in campos_fechas:
+                        if campo in row.index:
+                            crear_campo(content, f"{campo}:", row[campo])
+
+                    # === MONTOS ===
+                    crear_seccion(content, "💰 MONTOS Y PAGOS")
+                    campos_montos = ['Pago_AI', 'Rect_AI', 'Total', 'MTO_SIP_05', 'Monto_Comp3_SIP05']
+                    for campo in campos_montos:
+                        if campo in row.index:
+                            crear_campo(content, f"{campo}:", row[campo], True)
+
+                    # === DÍAS ===
+                    crear_seccion(content, "⏱️ DÍAS")
+                    campos_dias = ['Dias', 'MES']
+                    for campo in campos_dias:
+                        if campo in row.index:
+                            crear_campo(content, f"{campo}:", row[campo])
+
+                    # === PERSONAL ===
+                    crear_seccion(content, "👥 PERSONAL ASIGNADO")
+                    campos_personal = ['COD_VER', 'DES_NOMB_VER', 'COD_SUP', 'DES_NOMB_SUP']
+                    for campo in campos_personal:
+                        if campo in row.index:
+                            crear_campo(content, f"{campo}:", row[campo], True)
+
+                    # === OTROS DATOS ===
+                    crear_seccion(content, "📊 OTROS DATOS")
+                    campos_otros = ['COD_REG_ES', 'NUM_CARGA', 'FLG_PASE_F', 'Periodos_Revisados',
+                                   'FCJMMS', 'ESSALUD', 'SIP_05', 'Porc_Rend_Incons_SIP05']
+                    for campo in campos_otros:
+                        if campo in row.index and pd.notna(row[campo]):
+                            crear_campo(content, f"{campo}:", row[campo])
+
+                # === DATOS DE DETRACCIONES (fiscalizaciones4) ===
+                crear_seccion(content, "🏦 DATOS DE DETRACCIONES (fiscalizaciones4)", "#059669")
+                campos_f4 = ['F4_NUM_RUC', 'F4_NOM_RUC', 'F4_NUM_CARGOS', 'F4_MTO_CARGOS',
+                            'F4_NUM_ABONOS', 'F4_MTO_ABONOS', 'F4_IND_SIGNO', 'F4_MTO_SALDO']
+                for campo in campos_f4:
+                    if campo in row.index:
+                        crear_campo(content, f"{campo.replace('F4_', '')}:", row[campo], 'SALDO' in campo)
+
+                # Frame para botones
+                btn_frame = ctk.CTkFrame(detalle_win, fg_color="transparent")
+                btn_frame.pack(fill="x", pady=10, padx=10)
+
+                ctk.CTkButton(btn_frame, text="✖️ Cerrar", command=detalle_win.destroy,
+                            fg_color="#6B7280", hover_color="#4B5563",
+                            font=("Segoe UI", 12, "bold"), width=120, height=35).pack(side="right", padx=10)
+
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudo cargar el detalle:\n{str(e)}")
 
         def mostrar_datos_control_saldo(df_cruce):
             """Muestra los datos en la UI (llamado desde el hilo principal)"""
