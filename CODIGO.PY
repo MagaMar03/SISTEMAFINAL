@@ -14053,7 +14053,7 @@ def dashboard_control_detracciones():
                     LEFT JOIN mypes m ON TRIM(f3.NUM_DOCSEL) = TRIM(m.ruc)
                     WHERE LOWER(TRIM(IFNULL(f3.Estado, ''))) = 'pendiente'
 
-                    ORDER BY NUM_DOCSEL, TIPO, NUMERO;
+                    ORDER BY mto_saldo DESC, TIPO, NUM_DOCSEL;
                 """
                 df_cruce = pd.read_sql(query_cruce, DB_ENGINE)
                 control_saldo_cargado["df_completo"] = df_cruce
